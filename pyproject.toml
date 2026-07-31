@@ -1,7 +1,7 @@
 [project]
 name = "crc-docs"
 version = "0.1.0"
-description = "Add your description here"
+description = "Notebooks, pipelines, and examples for crc-sdk and crc-framework"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
