@@ -11,7 +11,3 @@ dependencies = [
     "plotly>=6.9.0",
     "crc-sdk[zarr,raster,geometry]>=0.1.0",
 ]
-
-# temp source until crc-sdk is published to PyPI
-[tool.uv.sources]
-crc-sdk = { git = "ssh://git@github.com/RiskThinking/crc-sdk.git", branch = "main" }
