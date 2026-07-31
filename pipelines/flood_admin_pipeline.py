@@ -25,7 +25,16 @@ from pathlib import Path
 
 from crc_sdk.connectors import HurdleFitPolicy, OSClimateIngestPolicy
 from crc_sdk.connectors.duckdb import DuckDBConnection, sql_quote
-from crc_sdk.geometry import GeoFormat, H3Indexer, PolyfillMode
+from crc_sdk.geometry import (
+    AREAS,
+    POINTS,
+    POLYGONS,
+    FormatAdapter,
+    GeoFormat,
+    H3Indexer,
+    PolyfillMode,
+)
+from crc_sdk.geometry.pmtiles import PMTilesBuild, PMTilesResult
 from crc_sdk.workflows import (
     OSClimateSelectionSpec,
     run_tiled_canonicalization,
@@ -80,8 +89,110 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip the Overture Maps impacted-places enrichment",
     )
+    parser.add_argument(
+        "--skip-pmtiles",
+        action="store_true",
+        help="Skip the final PMTiles export (requires tippecanoe/tile-join on PATH)",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("pipeline_output"))
     return parser.parse_args()
+
+
+def build_risk_pmtiles(
+    con,
+    risk_parquet: Path,
+    admin_geojson: Path,
+    output_pmtiles: Path,
+    *,
+    bounds: tuple[float, float, float, float],
+    h3_resolution: int,
+    overture_min_confidence: float,
+    work_dir: Path,
+) -> PMTilesResult:
+    """Export the three layers this pipeline already computes as one PMTiles archive.
+
+    One combined tiling pass, not three separate archives -- see
+    crc_sdk.geometry.pmtiles.PMTilesBuild. Hex boundaries come from DuckDB's
+    own h3 extension (vectorized SQL, no Python per-cell loop), matching the
+    same primitive gen_pmtiles_v2 uses for its hazard-area product.
+    """
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    # Hex-depth layer: reuse the final risk_by_province rows, attach exact
+    # H3 boundary geometry only at the very end (narrow-key-first idiom).
+    hex_path = work_dir / "hex_layer.parquet"
+    con.execute(
+        f"""
+        COPY (
+            SELECT cell_index, province, depth_m, place_count,
+                   h3_cell_to_boundary_wkb(CAST(cell_index AS UBIGINT)) AS geometry
+            FROM read_parquet({sql_quote(str(risk_parquet))})
+        ) TO {sql_quote(str(hex_path))} (FORMAT PARQUET, COMPRESSION ZSTD)
+        """
+    )
+
+    # Places layer: raw point geometry this time, not the per-hex count the
+    # existing places enrichment collapses to -- a "points" layer should be
+    # actual points, not one dot per flooded hex. Still restricted to the
+    # same flood-exposed cells as the existing places enrichment (not every
+    # place in the whole AOI bbox, which for a real city-scale AOI is
+    # millions of rows unrelated to this map's subject).
+    places_path = work_dir / "places_layer.parquet"
+    con.execute("SET s3_region = 'us-west-2'")
+    release = con.execute(
+        f"SELECT latest FROM read_json_auto({sql_quote(OVERTURE_CATALOG_URL)})"
+    ).fetchone()[0]
+    places_uri = f"s3://overturemaps-us-west-2/release/{release}/theme=places/type=place/*"
+    places_points_sql = f"""
+        (SELECT names.primary AS name, confidence,
+                ST_Point(bbox.xmin, bbox.ymin) AS geometry
+         FROM read_parquet({sql_quote(places_uri)}, filename=true, hive_partitioning=1)
+         WHERE bbox.xmin BETWEEN {bounds[0]} AND {bounds[2]}
+           AND bbox.ymin BETWEEN {bounds[1]} AND {bounds[3]}
+           AND confidence > {overture_min_confidence})
+    """
+    indexer = H3Indexer(con)
+    places_h3_sql = indexer.build_h3_query(
+        places_points_sql,
+        h3_resolution,
+        PolyfillMode.CENTROID,
+        geom_col="geometry",
+        h3_col="cell_index",
+        preserve_geom=True,
+    )
+    con.execute(
+        f"""
+        COPY (
+            SELECT p.name, p.confidence, p.geometry
+            FROM ({places_h3_sql}) p
+            JOIN (
+                SELECT DISTINCT cell_index FROM read_parquet({sql_quote(str(risk_parquet))})
+            ) r ON p.cell_index = r.cell_index
+        ) TO {sql_quote(str(places_path))} (FORMAT PARQUET, COMPRESSION ZSTD)
+        """
+    )
+
+    # Province-polygons layer: the same admin GeoJSON already used for the
+    # hazard join, read via the same format adapter H3Indexer uses internally.
+    provinces_path = work_dir / "province_layer.parquet"
+    admin_relation = FormatAdapter.build_read_relation(
+        con, str(admin_geojson), GeoFormat.GEOJSON, geometry_column="geometry",
+        preserve_source_geom=False,
+    )
+    con.execute(
+        f"""
+        COPY (SELECT * FROM {admin_relation})
+        TO {sql_quote(str(provinces_path))} (FORMAT PARQUET, COMPRESSION ZSTD)
+        """
+    )
+
+    return (
+        PMTilesBuild(con=con)
+        .layer(str(hex_path), name="hex_depth", zooms=(0, 12), preset=AREAS)
+        .add_layer(str(places_path), name="places", zooms=(0, 14), preset=POINTS)
+        .add_layer(str(provinces_path), name="provinces", zooms=(0, 10), preset=POLYGONS)
+        .write(str(output_pmtiles))
+    )
 
 
 def main() -> None:
@@ -240,6 +351,23 @@ def main() -> None:
         """
     ).show()
     print(f"wrote {final_path}")
+
+    # 7. PMTiles: export the three layers above as one downloadable archive.
+    # View at https://pmtiles.io -- PMTiles needs a JS map client (MapLibre
+    # GL JS) that a notebook/pipeline output can't provide inline.
+    if not args.skip_pmtiles:
+        pmtiles_path = output_dir / "risk_by_province.pmtiles"
+        result = build_risk_pmtiles(
+            con,
+            final_path,
+            admin_path,
+            pmtiles_path,
+            bounds=bounds,
+            h3_resolution=args.h3_resolution,
+            overture_min_confidence=0.7,
+            work_dir=output_dir,
+        )
+        print(f"pmtiles: wrote {result.output} (layers={result.layers})")
 
 
 if __name__ == "__main__":
