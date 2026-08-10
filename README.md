@@ -29,7 +29,7 @@ Cologne fixtures under `fixtures/os_climate/`, so it runs without AWS access.
 
 | Notebook | Pipeline twin | What it shows |
 |---|---|---|
-| [`notebooks/flood_risk_by_province.ipynb`](notebooks/flood_risk_by_province.ipynb) | [`pipelines/flood_admin_pipeline.py`](pipelines/flood_admin_pipeline.py) | OS-Climate → H3 → admin join → Overture places → PMTiles |
+| [`notebooks/flood_risk_by_province.ipynb`](notebooks/flood_risk_by_province.ipynb) | [`pipelines/flood_admin_pipeline.py`](pipelines/flood_admin_pipeline.py) | JRC GeoTIFF → H3 → admin join → Overture places → PMTiles |
 | [`notebooks/jrc_global_flood_hazard.ipynb`](notebooks/jrc_global_flood_hazard.ipynb) | [`pipelines/jrc_flood_pipeline.py`](pipelines/jrc_flood_pipeline.py) | Streamed GeoTIFF/COG → H3 sampling (JRC LISFLOOD) |
 
 ### Asset portfolios
@@ -59,7 +59,7 @@ uv run python examples/smoke/e2e_impact_portfolio.py
 - The portfolio track reads checked-in Parquet fixtures and is fully offline.
   Its multi-scenario cases are sensitivity stresses, not calibrated projections.
 - The areal track still fetches public boundary / raster inputs from
-  geoBoundaries, JRC, OS-Climate, and Overture.
+  geoBoundaries, JRC, and Overture.
 - Cached notebook outputs under `notebooks/data/` are gitignored.
 - Pipeline outputs land in `pipeline_output/` (also gitignored).
 - GitHub's notebook preview cannot run JS, so Plotly figures emit a static PNG
