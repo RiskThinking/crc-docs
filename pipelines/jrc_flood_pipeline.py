@@ -4,12 +4,18 @@ Run with:
 
     uv run python pipelines/jrc_flood_pipeline.py
 
-Same `GeoTiffRaster.scan_h3` path as the notebook: widen or drop --bounds to
-sample a whole 10x10-degree JRC tile instead of one neighborhood, and adjust
---return-periods to compare more (or fewer) of them. Reading happens in
-bounded-memory strips regardless of raster size, so peak memory stays flat
-as the AOI grows -- the same property the internal flood-extraction pipeline
-relies on to process rasters far larger than available RAM.
+Fits one canonical hazard curve per H3 cell across every requested return
+period (`crc_sdk.connectors.JRCIngestPolicy`/`canonicalize_jrc_flood`, the
+same curve-fit machinery OS-Climate ingest uses, applied here to JRC's own
+per-tile GeoTIFFs via `crc_sdk.providers.jrc.JRCProvider`) rather than
+writing one raw depth row per (cell, return period). The output is a real
+canonical hazard Parquet (`write_hazard_stream`) -- reading it back at any
+return period, including ones not explicitly requested here, is a curve
+evaluation away (`crc_sdk.workflows.curve_quantiles_at`), the same read path
+the asset-portfolio track already uses for OS-Climate data. Widen or drop
+--bounds to sample a whole 10x10-degree JRC tile instead of one
+neighborhood. Pixel reads happen in bounded-memory strips regardless of
+raster size, so peak memory stays flat as the AOI grows.
 """
 
 from __future__ import annotations
@@ -17,16 +23,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import pyarrow as pa
-import pyarrow.parquet as pq
-
-from crc_sdk.connectors.duckdb.geotiff import GeoTiffRaster
-
-JRC_BASE_URL = "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard"
-
-OUTPUT_SCHEMA = pa.schema(
-    [("cell", pa.uint64()), ("depth_m", pa.float32()), ("return_period", pa.int32())]
+from crc_sdk.connectors import (
+    JRCIngestPolicy,
+    read_hazard_dataset,
+    write_hazard_stream,
 )
+from crc_sdk.providers.jrc import GLOFAS, JRCProvider
+from crc_sdk.workflows import curve_quantiles_at, return_periods_to_probabilities
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,7 +43,12 @@ def parse_args() -> argparse.Namespace:
         help="JRC 10x10-degree tile id (default: %(default)s, covering Toronto)",
     )
     parser.add_argument(
-        "--return-periods", type=int, nargs="+", default=[10, 50, 100, 500]
+        "--return-periods",
+        type=int,
+        nargs="+",
+        default=[10, 50, 100, 500],
+        help="Return periods to fit each cell's curve against, and report "
+        "back at (years, default: %(default)s)",
     )
     parser.add_argument(
         "--bounds",
@@ -53,8 +61,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--h3-resolution",
         type=int,
-        default=None,
-        help="Override the resolution inferred from the raster's own pixel size",
+        default=9,
+        help="H3 resolution to fit curves at (default: %(default)s). Unlike "
+        "a raw scan, curve fitting has no raster-pixel-size-based auto-pick.",
+    )
+    parser.add_argument(
+        "--family",
+        default="gumbel_r",
+        help="Distribution family to fit each cell's return-level curve "
+        "against (default: %(default)s)",
     )
     parser.add_argument("--output-dir", type=Path, default=Path("pipeline_output"))
     return parser.parse_args()
@@ -64,33 +79,48 @@ def main() -> None:
     args = parse_args()
     output_dir: Path = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / "jrc_depths_by_cell.parquet"
     bounds = tuple(args.bounds) if args.bounds else None
 
-    # One writer across every return period: each tile is streamed, sampled,
-    # and appended in turn, so peak memory is one return period's cell
-    # count, never the whole run's.
-    with pq.ParquetWriter(out_path, OUTPUT_SCHEMA, compression="zstd") as writer:
-        for rp in args.return_periods:
-            url = f"{JRC_BASE_URL}/RP{rp}/{args.tile}_RP{rp}_depth.tif"
-            raster = GeoTiffRaster.open(url)
-            try:
-                table = (
-                    raster.scan_h3(
-                        bounds=bounds,
-                        h3_resolution=args.h3_resolution,
-                        mask=lambda band: band > 0.0,
-                    )
-                    .relation()
-                    .project(f"cell, value AS depth_m, {rp}::INTEGER AS return_period")
-                    .to_arrow_table()
-                )
-            finally:
-                raster.close()
-            writer.write_table(table)
-            print(f"{args.tile} RP{rp}: {table.num_rows:,} cells")
+    policy = JRCIngestPolicy(
+        h3_resolution=args.h3_resolution,
+        family=args.family,
+        producer="crc-docs-jrc-flood-pipeline",
+        creation_version="0.1.0",
+        value_semantics="riverine flood depth",
+        # Most pixels in a tile never flood at any requested return period
+        # and carry a constant, unfittable curve; skip those rather than
+        # aborting the whole tile.
+        on_fit_failure="skip",
+    )
+    provider = JRCProvider(GLOFAS, work_dir=output_dir)
+    stream = provider.canonicalize_tile(
+        args.tile, policy, return_periods=args.return_periods, bounds=bounds
+    )
 
-    print(f"wrote {out_path}")
+    hazard_path = output_dir / "jrc_depths_by_cell.parquet"
+    write_hazard_stream(stream, hazard_path)
+    print(f"wrote {hazard_path}")
+
+    # Round-trip through the canonical contract: read back the file just
+    # written (not the in-memory stream) before reconstructing depths, the
+    # same way any other consumer of this Parquet would.
+    table = read_hazard_dataset(hazard_path)
+    cell_ids = table["cell_index"].to_pylist()
+    print(f"{args.tile}: {table.num_rows:,} fitted curves")
+    for rp, probability in zip(
+        args.return_periods, return_periods_to_probabilities(args.return_periods)
+    ):
+        depths = curve_quantiles_at(table, probability)
+        # One H3 cell can have more than one contributing source pixel --
+        # JRC's own conservative H3 overlap coverage already produces this
+        # within a single tile -- so cells are reduced to their worst-case
+        # (max) depth before reporting.
+        by_cell: dict[int, float] = {}
+        for cell_id, depth in zip(cell_ids, depths):
+            if depth > by_cell.get(cell_id, float("-inf")):
+                by_cell[cell_id] = depth
+        peak = max(by_cell.values()) if by_cell else 0.0
+        print(f"  RP{rp}: {len(by_cell):,} cells, max depth {peak:.2f} m")
 
 
 if __name__ == "__main__":

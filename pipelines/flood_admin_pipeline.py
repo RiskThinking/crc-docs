@@ -6,29 +6,34 @@ Run with:
 
 Same code path scales from a laptop-sized AOI to a country/continent: widen
 --bounds and raise --max-workers for a production run. Nothing else changes.
-JRC's own 10x10-degree tile grid (resolved from its published tile index, not
-hardcoded) is the unit of parallelism — each tile is read and sampled to H3
-independently in its own worker, and `GeoTiffRaster.scan_h3` already streams
-each tile in bounded-memory strips regardless of its size. DuckDB handles the
-admin join, aggregation, and any disk spilling on its own; nothing downstream
-of the hazard sample is ever materialized into a pandas structure.
+JRC's own 10x10-degree tile grid (resolved via `crc_sdk.providers.jrc.JRCProvider`,
+not hardcoded) is the unit of parallelism — each tile is fitted to a canonical
+hazard curve per H3 cell independently in its own worker
+(`JRCIngestPolicy`/`canonicalize_jrc_flood`, the same curve-fit machinery
+OS-Climate ingest uses), and pixel reads stream in bounded-memory strips
+regardless of tile size. Depths at the requested return period are a curve
+evaluation away (`curve_quantiles_at`) rather than a raw per-return-period
+raster value — the tile shards this pipeline writes are reusable at any
+other return period without re-fetching JRC data. DuckDB handles the admin
+join, aggregation, and any disk spilling on its own; nothing downstream of
+the hazard fit is ever materialized into a pandas structure.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import urllib.request
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
-import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
-from shapely.geometry import box, shape
 
+from crc_sdk.connectors import (
+    JRCIngestPolicy,
+    read_hazard_dataset,
+    write_hazard_dataset,
+)
 from crc_sdk.connectors.duckdb import DuckDBConnection, sql_quote
-from crc_sdk.connectors.duckdb.geotiff import GeoTiffRaster
 from crc_sdk.geometry import (
     AREAS,
     POINTS,
@@ -37,15 +42,11 @@ from crc_sdk.geometry import (
     GeoFormat,
     H3Indexer,
     PolyfillMode,
-    reduce_h3_values,
 )
 from crc_sdk.geometry.pmtiles import PMTilesBuild, PMTilesResult
+from crc_sdk.providers.jrc import GLOFAS, JRCProvider, JRCRasterDataset
+from crc_sdk.workflows import curve_quantiles_at, return_periods_to_probabilities
 
-JRC_BASE_URL = (
-    "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard"
-)
-JRC_TILE_INDEX_URL = f"{JRC_BASE_URL}/tile_extents.geojson"
-JRC_RETURN_PERIODS = (10, 20, 50, 75, 100, 200, 500)
 DEFAULT_ADMIN_URL = (
     "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/"
     "gbOpen/DEU/ADM1/geoBoundaries-DEU-ADM1_simplified.geojson"
@@ -71,13 +72,22 @@ def parse_args() -> argparse.Namespace:
         "--return-period-years",
         type=int,
         default=100,
-        choices=JRC_RETURN_PERIODS,
+        choices=GLOFAS.available_return_periods,
+        help="Return period to report depths at; every tile's curve is "
+        "still fitted against all of GLOFAS.available_return_periods, so "
+        "the written shards are reusable at any other return period too",
+    )
+    parser.add_argument(
+        "--family",
+        default="gumbel_r",
+        help="Distribution family to fit each cell's return-level curve "
+        "against (default: %(default)s)",
     )
     parser.add_argument(
         "--max-workers",
         type=int,
         default=None,
-        help="Worker processes for parallel per-tile hazard sampling "
+        help="Worker processes for parallel per-tile hazard fitting "
         "(default: auto-detect from host CPUs)",
     )
     parser.add_argument("--admin-geojson-url", default=DEFAULT_ADMIN_URL)
@@ -95,38 +105,29 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def jrc_tiles_for(bounds: tuple[float, float, float, float]) -> list[str]:
-    """Tile ids (e.g. 'ID114_N50_W0') from JRC's own extent index intersecting `bounds`."""
-    with urllib.request.urlopen(JRC_TILE_INDEX_URL) as response:
-        index = json.load(response)
-    aoi = box(*bounds)
-    return [
-        f"ID{feature['properties']['id']}_{feature['properties']['name']}"
-        for feature in index["features"]
-        if box(*shape(feature["geometry"]).bounds).intersects(aoi)
-    ]
-
-
-def _sample_tile(
+def _canonicalize_tile(
     tile: str,
-    return_period: int,
+    output_path: Path,
+    *,
+    dataset: JRCRasterDataset,
+    policy: JRCIngestPolicy,
     bounds: tuple[float, float, float, float],
-    h3_resolution: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Worker body: stream one JRC tile straight to H3 cells. Runs in its own process."""
-    url = f"{JRC_BASE_URL}/RP{return_period}/{tile}_RP{return_period}_depth.tif"
-    raster = GeoTiffRaster.open(url)
-    try:
-        table = (
-            raster.scan_h3(
-                bounds=bounds, h3_resolution=h3_resolution, mask=lambda band: band > 0.0
-            )
-            .relation()
-            .to_arrow_table()
-        )
-    finally:
-        raster.close()
-    return table["cell"].to_numpy(), table["value"].to_numpy()
+) -> Path | None:
+    """Worker body: fit one JRC tile's return-period curves, write its shard.
+
+    Runs in its own process. Fits against every return period `dataset`
+    advertises (not just `--return-period-years`), so the shard this writes
+    is reusable at any other return period without re-fetching JRC data --
+    `max_workers=1` avoids nesting a second process pool inside this one for
+    the write's own curve-reconstruction validation pass.
+    """
+    provider = JRCProvider(dataset)
+    stream = provider.canonicalize_tile(tile, policy, bounds=bounds)
+    table = stream.read_all()
+    if table.num_rows == 0:
+        return None
+    write_hazard_dataset(table, output_path, stream.metadata, max_workers=1)
+    return output_path
 
 
 def build_risk_pmtiles(
@@ -243,34 +244,72 @@ def main() -> None:
     con = duck_config.connect()
     indexer = H3Indexer(con)
 
-    # 1. Hazard: one worker per JRC tile intersecting the AOI, each streaming
-    # its own tile straight to H3 cells; merged with the same reduce JRC's
-    # own connector uses to resolve pixels straddling a strip boundary,
-    # applied again here to resolve H3 cells straddling a *tile* boundary.
-    tiles = jrc_tiles_for(bounds)
+    # 1. Hazard: one worker per JRC tile intersecting the AOI (_canonicalize_tile).
+    # One H3 cell can have more than one contributing source pixel -- JRC's
+    # own conservative H3 overlap coverage already produces this within a
+    # single tile, tile parallelism doesn't add anything new here -- so
+    # cells are reduced to their worst-case (max) reconstructed depth before
+    # the admin join.
+    provider = JRCProvider(GLOFAS, work_dir=output_dir)
+    tiles = provider.tiles_for(bounds)
+    policy = JRCIngestPolicy(
+        h3_resolution=args.h3_resolution,
+        family=args.family,
+        producer="crc-docs-flood-admin-pipeline",
+        creation_version="0.1.0",
+        value_semantics="riverine flood depth",
+        # Most pixels in a country/continent-scale AOI never flood at any
+        # return period and carry a constant, unfittable curve; skip those
+        # rather than aborting the whole run.
+        on_fit_failure="skip",
+    )
+    hazard_dir = output_dir / "hazard_shards"
+    hazard_dir.mkdir(parents=True, exist_ok=True)
+    shard_paths = [
+        hazard_dir / f"tile_{index:04d}.parquet" for index in range(len(tiles))
+    ]
     with ProcessPoolExecutor(max_workers=args.max_workers) as pool:
         futures = [
             pool.submit(
-                _sample_tile, tile, args.return_period_years, bounds, args.h3_resolution
+                _canonicalize_tile,
+                tile,
+                path,
+                dataset=GLOFAS,
+                policy=policy,
+                bounds=bounds,
             )
-            for tile in tiles
+            for tile, path in zip(tiles, shard_paths)
         ]
-        results = [future.result() for future in futures]
-    cells = np.concatenate([cells for cells, _ in results])
-    depths = np.concatenate([depths for _, depths in results])
-    cells, depths = reduce_h3_values(cells, depths)
-    hazard_path = output_dir / "hazard.parquet"
-    pq.write_table(
-        pa.table(
-            {
-                "cell_index": pa.array(cells, type=pa.uint64()),
-                "depth_m": pa.array(depths, type=pa.float32()),
-            }
-        ),
-        hazard_path,
+        written = [future.result() for future in futures]
+    written = [path for path in written if path is not None]
+    if not written:
+        raise SystemExit(f"no fittable JRC pixels found for bounds={bounds}")
+
+    curves = pa.concat_tables(
+        [read_hazard_dataset(path) for path in written], promote_options="none"
     )
+    probability = return_periods_to_probabilities([args.return_period_years])[0]
+    depths = curve_quantiles_at(curves, probability)
+    curves = curves.append_column("depth_m", pa.array(depths, type=pa.float32()))
+    con.register("fitted_curves", curves.select(["cell_index", "depth_m"]))
+    hazard_path = output_dir / "hazard.parquet"
+    con.execute(
+        f"""
+        COPY (
+            SELECT cell_index, max(depth_m) AS depth_m
+            FROM fitted_curves
+            GROUP BY cell_index
+        ) TO {sql_quote(str(hazard_path))} (FORMAT PARQUET, COMPRESSION ZSTD)
+        """
+    )
+    con.unregister("fitted_curves")
+    depth_rows = con.execute(
+        f"SELECT COUNT(*) FROM read_parquet({sql_quote(str(hazard_path))})"
+    ).fetchone()[0]
     print(
-        f"hazard: {len(cells)} H3 cells across {len(tiles)} JRC tile(s) -> {hazard_path}"
+        f"hazard: fitted curves across {len(written)} of {len(tiles)} JRC "
+        f"tile(s) -> {depth_rows} H3 cells at RP{args.return_period_years} "
+        f"-> {hazard_path}"
     )
 
     # 2. Geography: one polyfill call; DuckDB already parallelizes this internally.
@@ -286,9 +325,9 @@ def main() -> None:
     )
     con.execute(f"CREATE OR REPLACE TEMP VIEW admin_h3 AS {admin_h3_sql}")
 
-    # 3. Join: hazard depths already are the 100-year (or whichever RP was
-    # requested) return-level -- JRC ships one raster per return period, so
-    # unlike a fitted curve there's no reconstruction step, just a join.
+    # 3. Join: hazard.parquet already holds the reconstructed, per-cell-
+    # reduced depth at the requested return period (step 1) -- this is a
+    # plain join, no curve reconstruction here.
     depth_path = output_dir / "depth_by_cell.parquet"
     con.execute(
         f"""
