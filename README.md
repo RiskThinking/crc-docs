@@ -29,8 +29,8 @@ Cologne fixtures under `fixtures/os_climate/`, so it runs without AWS access.
 
 | Notebook | Pipeline twin | What it shows |
 |---|---|---|
-| [`notebooks/flood_risk_by_province.ipynb`](notebooks/flood_risk_by_province.ipynb) | [`pipelines/flood_admin_pipeline.py`](pipelines/flood_admin_pipeline.py) | JRC GeoTIFF → H3 → admin join → Overture places → PMTiles |
-| [`notebooks/jrc_global_flood_hazard.ipynb`](notebooks/jrc_global_flood_hazard.ipynb) | [`pipelines/jrc_flood_pipeline.py`](pipelines/jrc_flood_pipeline.py) | Streamed GeoTIFF/COG → H3 sampling (JRC LISFLOOD) |
+| [`notebooks/flood_risk_by_province.ipynb`](notebooks/flood_risk_by_province.ipynb) | [`pipelines/flood_admin_pipeline.py`](pipelines/flood_admin_pipeline.py) | JRC GeoTIFF → canonical hazard contract (`JRCIngestPolicy`) → H3 → admin join → Overture places → PMTiles |
+| [`notebooks/jrc_global_flood_hazard.ipynb`](notebooks/jrc_global_flood_hazard.ipynb) | [`pipelines/jrc_flood_pipeline.py`](pipelines/jrc_flood_pipeline.py) | Streamed GeoTIFF/COG (JRC LISFLOOD) → fitted per-cell curve → return-period evaluation |
 
 ### Asset portfolios
 
