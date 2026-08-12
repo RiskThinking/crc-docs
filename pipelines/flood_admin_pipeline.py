@@ -4,35 +4,20 @@ Run with:
 
     uv run python pipelines/flood_admin_pipeline.py
 
-Same code path scales from a laptop-sized AOI to a country/continent: widen
---bounds and raise --max-workers for a production run. Nothing else changes.
-JRC's own 10x10-degree tile grid (resolved via `crc_sdk.providers.jrc.JRCProvider`,
-not hardcoded) is the unit of parallelism — each tile is fitted to a canonical
-hazard curve per H3 cell independently in its own worker
-(`JRCIngestPolicy`/`canonicalize_jrc_flood`, the same curve-fit machinery
-OS-Climate ingest uses), and pixel reads stream in bounded-memory strips
-regardless of tile size. Depths at the requested return period are a curve
-evaluation away (`curve_quantiles_at`) rather than a raw per-return-period
-raster value — the tile shards this pipeline writes are reusable at any
-other return period without re-fetching JRC data. DuckDB handles the admin
-join, aggregation, and any disk spilling on its own; nothing downstream of
-the hazard fit is ever materialized into a pandas structure.
+The fluent JRC plan resolves EFAS's current continental release, caches only
+the AOI crops, and materializes a canonical hazard dataset. DuckDB handles the
+admin join, aggregation, and disk spilling downstream of the fit.
 """
 
 from __future__ import annotations
 
 import argparse
 import urllib.request
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import pyarrow as pa
 
-from crc_sdk.connectors import (
-    JRCIngestPolicy,
-    read_hazard_dataset,
-    write_hazard_dataset,
-)
+from crc_sdk.connectors import read_hazard_dataset
 from crc_sdk.connectors.duckdb import DuckDBConnection, sql_quote
 from crc_sdk.geometry import (
     AREAS,
@@ -44,8 +29,14 @@ from crc_sdk.geometry import (
     PolyfillMode,
 )
 from crc_sdk.geometry.pmtiles import PMTilesBuild, PMTilesResult
-from crc_sdk.providers.jrc import GLOFAS, JRCProvider, JRCRasterDataset
-from crc_sdk.workflows import curve_quantiles_at, return_periods_to_probabilities
+from crc_sdk.providers.jrc import EFAS
+from crc_sdk.workflows import (
+    HazardDataset,
+    JRCFloodPolicy,
+    curve_quantiles_at,
+    return_periods_to_probabilities,
+    warn_if_extrapolated,
+)
 
 DEFAULT_ADMIN_URL = (
     "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/"
@@ -72,23 +63,11 @@ def parse_args() -> argparse.Namespace:
         "--return-period-years",
         type=int,
         default=100,
-        choices=GLOFAS.available_return_periods,
-        help="Return period to report depths at; every tile's curve is "
-        "still fitted against all of GLOFAS.available_return_periods, so "
-        "the written shards are reusable at any other return period too",
+        choices=EFAS.available_return_periods,
+        help="Return period to report; the canonical fit uses every EFAS period",
     )
     parser.add_argument(
-        "--family",
-        default="gumbel_r",
-        help="Distribution family to fit each cell's return-level curve "
-        "against (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--max-workers",
-        type=int,
-        default=None,
-        help="Worker processes for parallel per-tile hazard fitting "
-        "(default: auto-detect from host CPUs)",
+        "--cache-mode", choices=("reuse", "offline", "refresh"), default="reuse"
     )
     parser.add_argument("--admin-geojson-url", default=DEFAULT_ADMIN_URL)
     parser.add_argument(
@@ -103,31 +82,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output-dir", type=Path, default=Path("pipeline_output"))
     return parser.parse_args()
-
-
-def _canonicalize_tile(
-    tile: str,
-    output_path: Path,
-    *,
-    dataset: JRCRasterDataset,
-    policy: JRCIngestPolicy,
-    bounds: tuple[float, float, float, float],
-) -> Path | None:
-    """Worker body: fit one JRC tile's return-period curves, write its shard.
-
-    Runs in its own process. Fits against every return period `dataset`
-    advertises (not just `--return-period-years`), so the shard this writes
-    is reusable at any other return period without re-fetching JRC data --
-    `max_workers=1` avoids nesting a second process pool inside this one for
-    the write's own curve-reconstruction validation pass.
-    """
-    provider = JRCProvider(dataset)
-    stream = provider.canonicalize_tile(tile, policy, bounds=bounds)
-    table = stream.read_all()
-    if table.num_rows == 0:
-        return None
-    write_hazard_dataset(table, output_path, stream.metadata, max_workers=1)
-    return output_path
 
 
 def build_risk_pmtiles(
@@ -244,51 +198,21 @@ def main() -> None:
     con = duck_config.connect()
     indexer = H3Indexer(con)
 
-    # 1. Hazard: one worker per JRC tile intersecting the AOI (_canonicalize_tile).
-    # One H3 cell can have more than one contributing source pixel -- JRC's
-    # own conservative H3 overlap coverage already produces this within a
-    # single tile, tile parallelism doesn't add anything new here -- so
-    # cells are reduced to their worst-case (max) reconstructed depth before
-    # the admin join.
-    provider = JRCProvider(GLOFAS, work_dir=output_dir)
-    tiles = provider.tiles_for(bounds)
-    policy = JRCIngestPolicy(
-        h3_resolution=args.h3_resolution,
-        family=args.family,
-        producer="crc-docs-flood-admin-pipeline",
-        creation_version="0.1.0",
-        value_semantics="riverine flood depth",
-        # Most pixels in a country/continent-scale AOI never flood at any
-        # return period and carry a constant, unfittable curve; skip those
-        # rather than aborting the whole run.
-        on_fit_failure="skip",
+    plan = (
+        HazardDataset.efas(version="latest")
+        .for_area(bounds)
+        .cache(output_dir / "efas-source-cache", mode=args.cache_mode)
+        .source_periods("all")
+        .canonicalize(policy=JRCFloodPolicy.curated(h3_resolution=args.h3_resolution))
     )
-    hazard_dir = output_dir / "hazard_shards"
-    hazard_dir.mkdir(parents=True, exist_ok=True)
-    shard_paths = [
-        hazard_dir / f"tile_{index:04d}.parquet" for index in range(len(tiles))
-    ]
-    with ProcessPoolExecutor(max_workers=args.max_workers) as pool:
-        futures = [
-            pool.submit(
-                _canonicalize_tile,
-                tile,
-                path,
-                dataset=GLOFAS,
-                policy=policy,
-                bounds=bounds,
-            )
-            for tile, path in zip(tiles, shard_paths)
-        ]
-        written = [future.result() for future in futures]
-    written = [path for path in written if path is not None]
-    if not written:
-        raise SystemExit(f"no fittable JRC pixels found for bounds={bounds}")
-
-    curves = pa.concat_tables(
-        [read_hazard_dataset(path) for path in written], promote_options="none"
-    )
-    probability = return_periods_to_probabilities([args.return_period_years])[0]
+    canonical_path = output_dir / "efas_curves.parquet"
+    canonical = plan.materialize(canonical_path)
+    metadata = canonical.metadata()
+    warn_if_extrapolated([args.return_period_years], metadata.return_period_support)
+    curves = read_hazard_dataset(canonical.provider.source)
+    probability = return_periods_to_probabilities(
+        [args.return_period_years], tail=metadata.return_period_tail
+    )[0]
     depths = curve_quantiles_at(curves, probability)
     curves = curves.append_column("depth_m", pa.array(depths, type=pa.float32()))
     con.register("fitted_curves", curves.select(["cell_index", "depth_m"]))
@@ -307,9 +231,8 @@ def main() -> None:
         f"SELECT COUNT(*) FROM read_parquet({sql_quote(str(hazard_path))})"
     ).fetchone()[0]
     print(
-        f"hazard: fitted curves across {len(written)} of {len(tiles)} JRC "
-        f"tile(s) -> {depth_rows} H3 cells at RP{args.return_period_years} "
-        f"-> {hazard_path}"
+        f"hazard: EFAS {canonical.materialization.source_version} -> "
+        f"{depth_rows} H3 cells at RP{args.return_period_years} -> {hazard_path}"
     )
 
     # 2. Geography: one polyfill call; DuckDB already parallelizes this internally.
