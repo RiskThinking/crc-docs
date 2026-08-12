@@ -43,18 +43,6 @@ Cologne fixtures under `fixtures/os_climate/`, so it runs without AWS access.
 | 4 | [`notebooks/portfolio_risk_metrics.ipynb`](notebooks/portfolio_risk_metrics.ipynb) | [`pipelines/portfolio_risk_pipeline.py`](pipelines/portfolio_risk_pipeline.py) | Microscores → portfolio VaR / CVaR + attribution |
 | 5 | [`notebooks/multi_scenario_portfolio.ipynb`](notebooks/multi_scenario_portfolio.ipynb) | [`pipelines/multi_scenario_pipeline.py`](pipelines/multi_scenario_pipeline.py) | Historical vs transparent local tail stresses in one evaluation |
 
-## Smoke tests
-
-[`examples/smoke/`](examples/smoke/) holds the original live SDK smoke scripts
-these docs grew out of. Useful for regression checks; the notebooks above are
-the narrative entry point.
-
-```shell
-uv run python examples/smoke/e2e_os_climate.py
-uv run python examples/smoke/e2e_asset_portfolio.py
-uv run python examples/smoke/e2e_impact_portfolio.py
-```
-
 ## Notes
 
 - The portfolio track reads checked-in Parquet fixtures and is fully offline.
