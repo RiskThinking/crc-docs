@@ -9,5 +9,5 @@ dependencies = [
     "kaleido>=0.2.1",
     "pandas>=3.0.5",
     "plotly>=6.9.0",
-    "crc-sdk[zarr,raster,netcdf,geometry]>=0.2.0",
+    "crc-sdk[zarr,raster,netcdf,geometry]>=0.3.0",
 ]

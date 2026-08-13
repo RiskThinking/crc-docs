@@ -618,7 +618,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "crc-sdk", extras = ["zarr", "raster", "netcdf", "geometry"], specifier = ">=0.2.0" },
+    { name = "crc-sdk", extras = ["zarr", "raster", "netcdf", "geometry"], specifier = ">=0.3.0" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "kaleido", specifier = ">=0.2.1" },
     { name = "pandas", specifier = ">=3.0.5" },
@@ -648,7 +648,7 @@ wheels = [
 
 [[package]]
 name = "crc-sdk"
-version = "0.2.0"
+version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "crc-framework" },
@@ -660,9 +660,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "s3fs" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8c/b7/05f9711eeab3b42d4f4f91b1718407c1b18713c9335b8f241388fc9597cd/crc_sdk-0.2.0.tar.gz", hash = "sha256:1372cd99c8f1ed4d1296f5b0da69b510c9133e9438da20792f9befd1b628b644", size = 146179, upload-time = "2026-08-12T16:40:06.582Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/42/69/abc2e9b4dfa23018ca8aac66280dafb7f7cf217f0f5709c5da5a15927090/crc_sdk-0.3.0.tar.gz", hash = "sha256:6de2e2f8c7abd944e93a5bbfe6c1fd67d9ad6b70c4a472a32b1c601c68777c50", size = 165349, upload-time = "2026-08-13T16:51:34.287Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/b4/02aaa393d7afd815579adb5b0451a547a797083c8059bf368305c566ea73/crc_sdk-0.2.0-py3-none-any.whl", hash = "sha256:16e94d287bf894f73b1dad11c0ce9a94e1a9c326723b507adf77c6069adb4149", size = 125941, upload-time = "2026-08-12T16:40:05.314Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/8c/68120f73174d983775cf65a8b0ee9a196b3ced98ab14fab9a5b16598f9d5/crc_sdk-0.3.0-py3-none-any.whl", hash = "sha256:8cefaed6b24c24f4d129c1d1a2a0f7a6da332aa5f370b2406f4e0db1618dff19", size = 142860, upload-time = "2026-08-13T16:51:32.786Z" },
 ]
 
 [package.optional-dependencies]
