@@ -195,14 +195,19 @@ def command(*parts: str | Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def load_script(skill: str, filename: str) -> Any:
-    path = SKILLS / skill / "scripts" / filename
-    spec = importlib.util.spec_from_file_location(f"dogfood_{skill.replace('-', '_')}", path)
+def load_module(path: Path) -> Any:
+    module_name = "dogfood_" + "_".join(path.with_suffix("").parts[-3:])
+    module_name = module_name.replace("-", "_")
+    spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def load_script(skill: str, filename: str) -> Any:
+    return load_module(SKILLS / skill / "scripts" / filename)
 
 
 def run_mocked(module: Any, argv: list[str], client: FakeClient) -> None:
@@ -306,11 +311,16 @@ def multi_scenario_flood(destination: Path) -> Path:
 
 def dogfood_mortgage(directory: Path, assets: Path) -> dict[str, Any]:
     script = SKILLS / "crc-screen-mortgage-flood" / "scripts" / "screen_mortgage_flood.py"
+    skill_module = load_module(script)
+    pipeline_module = load_module(ROOT / "pipelines" / "jrc_flood_pipeline.py")
+    skill_resolution = skill_module.parser().get_default("h3_resolution")
+    pipeline_resolution = pipeline_module.parser().get_default("h3_resolution")
+    assert skill_resolution == pipeline_resolution == 9
     common = [sys.executable, script, "--assets", assets, "--cache", directory / "cache", "--output", directory / "unused.parquet", "--plan-only"]
     europe = command(*common, "--dataset", "efas", "--bounds", "6.8", "50.8", "7.7", "51.1")
     canada = command(*common, "--dataset", "glofas", "--bounds", "-79.7", "43.5", "-79.1", "43.9")
     assert "cems-efas" in europe.stdout and "cems-glofas" in canada.stdout
-    return {"skill": "crc-screen-mortgage-flood", "targets": ["EFAS/Cologne AOI", "GloFAS/Toronto AOI"], "result": "pass"}
+    return {"skill": "crc-screen-mortgage-flood", "targets": ["EFAS/Cologne AOI", "GloFAS/Toronto AOI"], "h3_resolution": skill_resolution, "result": "pass"}
 
 
 def dogfood_loss(directory: Path, portfolios: tuple[Path, Path]) -> dict[str, Any]:

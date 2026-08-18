@@ -42,6 +42,24 @@ membership.
 6. Use `notebooks/multi_scenario_portfolio.ipynb` only as a transparent sensitivity-stress example, not a calibrated projection. Use `crc-framework` risk aggregation only when binary outcomes, dependencies/independence assumptions, confidence levels, and branch limits are explicitly defined. Read [references/playbook.md](references/playbook.md).
 7. Pair with `$velo-assess-company-climate-risk` when entity resolution, ownership, benchmarks, more hazards, proprietary data, or enterprise scenario/risk scores matter.
 
+## Deliverable bundle
+
+Retain one canonical evaluation Parquet per hazard; never replace these with a
+presentation-only aggregate. Also create a joined analysis-ready CSV, GeoJSON,
+and self-contained HTML report plus a manifest describing every source,
+scenario, unit, and non-equivalence. In the response, show a compact table with
+asset, hazard, match status, selected metric, unit, pathway, and horizon, sorted
+within—not across—incompatible hazards. Include:
+
+- a portfolio map with a hazard selector or small multiples, marking missing
+  and extrapolated assets explicitly; and
+- per-hazard exposure/concentration charts, with separate panels when units,
+  horizons, or semantics differ.
+
+Make the full table and visuals downloadable when supported. Use a bounded,
+clearly disclosed top-risk subset only for readability; keep all rows in the
+artifacts. Do not fabricate a combined score or silently geocode missing assets.
+
 ## Future dataset seam
 
 When the open CDT hazard dataset is released, require it to materialize the current CRC canonical hazard contract. Downstream evaluation must remain unchanged. Until then, label the source as planned and never synthesize its data.

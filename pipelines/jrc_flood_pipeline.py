@@ -20,30 +20,34 @@ from crc_sdk.workflows import (
 )
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+def parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument(
         "--bounds",
         type=float,
         nargs=4,
         default=(-79.65, 43.58, -79.15, 43.85),
         metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
     )
-    parser.add_argument(
+    p.add_argument(
         "--return-periods", type=int, nargs="+", default=[10, 50, 100, 500]
     )
-    parser.add_argument(
+    p.add_argument(
         "--dataset",
         choices=("efas", "glofas"),
         default="glofas",
         help="Use EFAS for Europe and GloFAS for global coverage",
     )
-    parser.add_argument("--h3-resolution", type=int, default=9)
-    parser.add_argument(
+    p.add_argument("--h3-resolution", type=int, default=9)
+    p.add_argument(
         "--cache-mode", choices=("reuse", "offline", "refresh"), default="reuse"
     )
-    parser.add_argument("--output-dir", type=Path, default=Path("pipeline_output"))
-    return parser.parse_args()
+    p.add_argument("--output-dir", type=Path, default=Path("pipeline_output"))
+    return p
+
+
+def parse_args() -> argparse.Namespace:
+    return parser().parse_args()
 
 
 def main() -> None:

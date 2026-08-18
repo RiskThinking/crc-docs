@@ -49,6 +49,23 @@ never present mocked classifications as live VELO results.
 6. Separate the VELO platform classification from the insurer's appetite, pricing, wording, deductibles, reinsurance, and regulatory capital policy.
 7. Reconcile with `$crc-model-flood-insurance-loss` only for aligned assets and flood-related evidence; use the comparison to show multi-hazard and enterprise-data lift.
 
+## Deliverable bundle
+
+Retain the unmodified authorized MCP responses, or SDK export, as private JSON
+with scenario and tool provenance. Also create an analysis-ready asset CSV,
+GeoJSON when authorized coordinates are available, and a self-contained HTML
+report plus manifest. In the response, show a compact table of the highest
+priority assets with classification, `cvar_95`, overlap, country, asset type,
+scenario, and coverage status. Include:
+
+- a map with distinct uninsurable, stranded, overlap, and coverage-exception
+  classes; and
+- classification-count and country/asset-type concentration charts.
+
+Keep the complete portfolio in downloadable artifacts and use a disclosed,
+bounded subset only in the visible table/map. Do not expose private asset data
+beyond the authorized workspace or invent coordinates for unlocated assets.
+
 ## Safety
 
 - Never expose credentials.

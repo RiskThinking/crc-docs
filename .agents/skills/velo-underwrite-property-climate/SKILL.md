@@ -50,6 +50,23 @@ never replace enterprise evidence with synthetic data.
 6. Compare with the CRC result only after aligning the asset, hazard/factor, horizon/pathway, unit, and metric. Label all non-equivalent results.
 7. Write an underwriting evidence memo that distinguishes measured output, platform classification, house policy, and expert judgment.
 
+## Deliverable bundle
+
+Retain the unmodified authorized MCP responses, or SDK export, as private JSON
+with tool names and inputs. Also create a flattened analysis-ready CSV, GeoJSON
+when authorized coordinates are returned, and a self-contained HTML report with
+a provenance manifest. In the response, show a compact table of scenario,
+overall metrics, factor metrics, units, and missing fields. Include:
+
+- a property map that identifies the resolved asset and spatial precision
+  without exposing unnecessary private attributes; and
+- a factor-contribution or scenario-comparison chart using only semantically
+  compatible returned metrics.
+
+Make sanitized table and visual artifacts downloadable when the host permits.
+If the service does not return coordinates, show the identity evidence but do
+not geocode the address or manufacture a map point without user approval.
+
 ## Safety
 
 - Read `RISKTHINKING_API_KEY` from the environment; never request or print it.

@@ -18,6 +18,8 @@ Install `crc-sdk[geometry,raster]==0.3.0`. Point-to-H3 conversion needs the geom
   Overture provenance fields only when appropriate for the output.
 - AOI bounds: `min_lon min_lat max_lon max_lat` in WGS84.
 - Source: EFAS for Europe; GloFAS elsewhere.
+- H3 resolution: default to 9 for asset-level flood acquisition, matching
+  `pipelines/jrc_flood_pipeline.py`; record any explicit override in outputs.
 - Return periods: choose decision-relevant periods within the resolved source support where possible.
 
 ## Interpretation
