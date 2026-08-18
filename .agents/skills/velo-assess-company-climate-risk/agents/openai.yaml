@@ -2,3 +2,11 @@ interface:
   display_name: "VELO Company Climate Risk"
   short_description: "Assess company and market climate risk in VELO"
   default_prompt: "Use $velo-assess-company-climate-risk."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "io.github.RiskThinking/cdt-express-mcp"
+      description: "CDT Express climate, asset, company, and market tools"
+      transport: "streamable_http"
+      url: "https://mcp.riskthinking.ai/mcp"

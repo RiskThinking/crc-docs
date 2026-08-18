@@ -1,6 +1,6 @@
 ---
 name: velo-assess-company-climate-risk
-description: Assess company or market-index physical climate risk with VELO/CDT using company, asset, market, climate-score, impact, and aggregation APIs. Use for investment diligence, lending portfolios, company benchmarking, country or asset-type concentration, scenario comparison, or the enterprise twin to a CRC supplied-asset assessment.
+description: Assess company or market-index physical climate risk with VELO/CDT using the remote CDT Express MCP server or velo-sdk company, asset, market, climate-score, impact, and aggregation APIs. Use for investment diligence, lending portfolios, company benchmarking, country or asset-type concentration, scenario comparison, or the enterprise twin to a CRC supplied-asset assessment.
 ---
 
 # VELO company climate risk
@@ -19,10 +19,22 @@ is materially ambiguous. Do not ask non-experts for company IDs, index IDs, or
 raw scenario codes the service can discover. Valid advanced inputs override
 defaults.
 
+## CDT Express MCP execution
+
+Prefer the declared `CDT Express` remote MCP dependency for an AI chat session.
+If it is not connected, direct the user to add
+`https://mcp.riskthinking.ai/mcp` and complete VELO OAuth; never request an API
+key in chat. Inspect the connected tool list and schemas before calls. Use the
+company or market search/detail tools to resolve the target, then the matching
+climate-score and constituent/asset-score tools. Read
+[references/playbook.md](references/playbook.md) for exact sequences. Prefer
+bounded, sorted calls for decision-relevant concentrations; confirm scope before
+exhaustive retrieval.
+
 ## Demo bootstrap
 
 This live enterprise skill does not require local asset files. Use the authorized
-MCP or SDK connection to search the requested company or index and discover
+MCP connection, or the SDK fallback, to search the requested company or index and discover
 supported pathways and horizons, then ask the user to resolve ambiguity. If no
 authorized connection is available, explain the prerequisite and stop. The
 repository's synthetic VELO-shaped JSON is only for reconciliation smoke tests,

@@ -2,3 +2,11 @@ interface:
   display_name: "VELO Property Climate Underwriting"
   short_description: "Underwrite property with enterprise climate data"
   default_prompt: "Use $velo-underwrite-property-climate."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "io.github.RiskThinking/cdt-express-mcp"
+      description: "CDT Express climate, asset, company, and market tools"
+      transport: "streamable_http"
+      url: "https://mcp.riskthinking.ai/mcp"

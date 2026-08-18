@@ -2,3 +2,11 @@ interface:
   display_name: "VELO Portfolio Insurability Triage"
   short_description: "Triage uninsurable and stranded portfolio assets"
   default_prompt: "Use $velo-triage-portfolio-insurability."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "io.github.RiskThinking/cdt-express-mcp"
+      description: "CDT Express climate, asset, company, and market tools"
+      transport: "streamable_http"
+      url: "https://mcp.riskthinking.ai/mcp"
