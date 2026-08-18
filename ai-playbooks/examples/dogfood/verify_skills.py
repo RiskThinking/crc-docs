@@ -6,10 +6,12 @@ from __future__ import annotations
 import argparse
 import csv
 import importlib.util
+import io
 import json
 import subprocess
 import sys
 import tempfile
+from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any
 
@@ -210,18 +212,26 @@ def load_script(skill: str, filename: str) -> Any:
     return load_module(SKILLS / skill / "scripts" / filename)
 
 
-def run_mocked(module: Any, argv: list[str], client: FakeClient) -> None:
+def run_mocked(
+    module: Any,
+    argv: list[str],
+    client: FakeClient,
+    expected_return_codes: tuple[int | None, ...] = (None, 0),
+) -> str:
     old_argv = sys.argv
     old_client = module.APIClient
+    stdout = io.StringIO()
     try:
         module.APIClient = lambda: client
         sys.argv = [str(module.__file__), *argv]
-        result = module.main()
-        if result not in (None, 0):
+        with redirect_stdout(stdout):
+            result = module.main()
+        if result not in expected_return_codes:
             raise AssertionError(f"unexpected return code {result}")
     finally:
         module.APIClient = old_client
         sys.argv = old_argv
+    return stdout.getvalue()
 
 
 def write_asset_targets(directory: Path) -> tuple[Path, Path]:
@@ -359,7 +369,47 @@ def dogfood_property(directory: Path, client: FakeClient) -> tuple[dict[str, Any
     alpha = json.loads(output_a.read_text())
     beta = json.loads(output_b.read_text())
     assert alpha["asset"]["id"] == "asset-a" and beta["asset"]["id"] == "asset-b"
-    evidence = {"skill": "velo-underwrite-property-climate", "targets": ["asset ID/Cologne warehouse/2050", "search/Toronto plant/2070"], "result": "pass (API double)"}
+    for number in range(12):
+        asset_id = f"overflow-{number}"
+        client.assets.items[asset_id] = Record(
+            id=asset_id,
+            name=f"Overflow Property {number}",
+            address=f"{number} Example Road",
+            latitude=43.65,
+            longitude=-79.38,
+            asset_type="office",
+        )
+    selection_output = run_mocked(
+        module,
+        [
+            "--query",
+            "Overflow Property",
+            "--pathway",
+            "ssp245",
+            "--horizon",
+            "2050",
+            "--output",
+            str(directory / "unused.json"),
+        ],
+        client,
+        expected_return_codes=(2,),
+    )
+    selection = json.loads(selection_output)
+    assert selection["status"] == "selection_required"
+    assert selection["returned_count"] == len(selection["candidates"]) == 10
+    assert selection["truncated"] is True
+    assert selection["match_count"] is None
+    assert selection["match_count_lower_bound"] == 11
+    assert "refine" in selection["message"].lower()
+    evidence = {
+        "skill": "velo-underwrite-property-climate",
+        "targets": [
+            "asset ID/Cologne warehouse/2050",
+            "search/Toronto plant/2070",
+            "ambiguous search with more than 10 matches",
+        ],
+        "result": "pass (API double)",
+    }
     return evidence, output_a, output_b
 
 

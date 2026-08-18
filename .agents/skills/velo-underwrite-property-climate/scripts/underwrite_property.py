@@ -41,7 +41,31 @@ def main() -> int:
     else:
         candidates = list(islice(client.assets.search_assets(args.query), 11))
         if len(candidates) != 1:
-            print(json.dumps({"status": "selection_required", "candidates": [dump(item) for item in candidates[:10]]}, indent=2))
+            visible_candidates = candidates[:10]
+            truncated = len(candidates) > len(visible_candidates)
+            print(
+                json.dumps(
+                    {
+                        "status": "selection_required",
+                        "query": args.query,
+                        "returned_count": len(visible_candidates),
+                        "match_count": None if truncated else len(candidates),
+                        "match_count_lower_bound": len(candidates),
+                        "truncated": truncated,
+                        "message": (
+                            "Showing the first 10 matches; refine the query before selecting an asset."
+                            if truncated
+                            else (
+                                "Select one of the returned matches."
+                                if candidates
+                                else "No matching assets found; revise the query."
+                            )
+                        ),
+                        "candidates": [dump(item) for item in visible_candidates],
+                    },
+                    indent=2,
+                )
+            )
             return 2
         asset = candidates[0]
 
@@ -66,4 +90,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

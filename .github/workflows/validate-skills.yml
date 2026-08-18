@@ -4,12 +4,16 @@ on:
   pull_request:
     paths:
       - ".agents/skills/**"
+      - ".claude/skills"
+      - ".mcp.json"
       - ".github/workflows/validate-skills.yml"
   push:
     branches:
       - main
     paths:
       - ".agents/skills/**"
+      - ".claude/skills"
+      - ".mcp.json"
       - ".github/workflows/validate-skills.yml"
   workflow_dispatch:
 
@@ -30,6 +34,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ ! -L .claude/skills ]] || [[ "$(readlink .claude/skills)" != "../.agents/skills" ]]; then
+            echo ".claude/skills must point to ../.agents/skills" >&2
+            exit 1
+          fi
+          python -m json.tool .mcp.json >/dev/null
           shopt -s nullglob
           skills=(.agents/skills/*)
           if (( ${#skills[@]} == 0 )); then

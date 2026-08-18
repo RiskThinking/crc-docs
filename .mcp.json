@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cdt-express": {
+      "type": "http",
+      "url": "https://mcp.riskthinking.ai/mcp"
+    }
+  }
+}
