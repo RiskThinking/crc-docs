@@ -1,0 +1,4 @@
+interface:
+  display_name: "CRC Asset Portfolio Risk"
+  short_description: "Assess supplied assets with open climate hazards"
+  default_prompt: "Use $crc-assess-asset-portfolio-risk to assess this asset book with CRC hazard datasets."

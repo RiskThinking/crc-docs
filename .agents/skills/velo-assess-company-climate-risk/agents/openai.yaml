@@ -1,0 +1,4 @@
+interface:
+  display_name: "VELO Company Climate Risk"
+  short_description: "Assess company and market climate risk in VELO"
+  default_prompt: "Use $velo-assess-company-climate-risk to perform climate diligence on this company or market index."

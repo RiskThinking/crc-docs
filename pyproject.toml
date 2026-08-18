@@ -11,3 +11,8 @@ dependencies = [
     "plotly>=6.9.0",
     "crc-sdk[zarr,raster,netcdf,geometry]>=0.3.0",
 ]
+
+[project.optional-dependencies]
+velo = [
+    "velo-sdk==0.0.20",
+]

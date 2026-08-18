@@ -32,6 +32,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--return-periods", type=int, nargs="+", default=[10, 50, 100, 500]
     )
+    parser.add_argument(
+        "--dataset",
+        choices=("efas", "glofas"),
+        default="glofas",
+        help="Use EFAS for Europe and GloFAS for global coverage",
+    )
     parser.add_argument("--h3-resolution", type=int, default=9)
     parser.add_argument(
         "--cache-mode", choices=("reuse", "offline", "refresh"), default="reuse"
@@ -46,7 +52,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     plan = (
-        HazardDataset.glofas(version="latest")
+        getattr(HazardDataset, args.dataset)(version="latest")
         .for_area(tuple(args.bounds))
         .cache(output_dir / "jrc-source-cache", mode=args.cache_mode)
         .source_periods("all")

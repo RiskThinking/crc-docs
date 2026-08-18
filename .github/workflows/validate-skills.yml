@@ -1,0 +1,41 @@
+name: Validate agent skills
+
+on:
+  pull_request:
+    paths:
+      - ".agents/skills/**"
+      - ".github/workflows/validate-skills.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".agents/skills/**"
+      - ".github/workflows/validate-skills.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Validate Agent Skills
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          skills=(.agents/skills/*)
+          if (( ${#skills[@]} == 0 )); then
+            echo "No skills found under .agents/skills" >&2
+            exit 1
+          fi
+          for skill in "${skills[@]}"; do
+            uvx --from "skills-ref==0.1.1" agentskills validate "$skill"
+          done

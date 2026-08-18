@@ -1,0 +1,22 @@
+{
+  "sdk_version": "0.0.20",
+  "target_type": "company",
+  "target": {
+    "id": "demo-company",
+    "name": "Synthetic Manufacturing Co."
+  },
+  "pathway": "ssp585",
+  "horizon": 2050,
+  "climate_score": {
+    "dcr_score": 0.42,
+    "expected_impact": 0.08,
+    "cvar_95": 0.31
+  },
+  "factor_impacts": [
+    {
+      "index_name": "synthetic-flood-factor",
+      "index_impact_cvar_95": 0.12
+    }
+  ],
+  "example_only": true
+}

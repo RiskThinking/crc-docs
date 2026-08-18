@@ -1,0 +1,4 @@
+interface:
+  display_name: "Compare CRC and VELO Assessments"
+  short_description: "Reconcile open and enterprise climate results"
+  default_prompt: "Use $compare-crc-velo-assessments to compare these CRC and VELO outputs and explain the capability lift."
