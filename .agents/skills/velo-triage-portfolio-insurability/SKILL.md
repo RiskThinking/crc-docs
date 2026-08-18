@@ -1,6 +1,6 @@
 ---
 name: velo-triage-portfolio-insurability
-description: Triage a company's physical-asset portfolio using VELO's uninsurable and stranded asset classifications under a selected pathway and horizon. Use for insurance portfolio review, renewal triage, climate concentration, high-risk asset lists, or the higher-calibre twin to a CRC flood damage assessment.
+description: Triage a company's physical-asset portfolio through the remote CDT Express MCP server or velo-sdk using VELO climate scores and documented uninsurable and stranded thresholds. Use for insurance portfolio review, renewal triage, climate concentration, high-risk asset lists, or the higher-calibre twin to a CRC flood damage assessment.
 ---
 
 # VELO portfolio insurability triage
@@ -18,10 +18,23 @@ than asking the user for raw platform codes. Ask a follow-up only when identity,
 scenario intent, or decision context is materially unclear. Valid advanced
 inputs override defaults.
 
+## CDT Express MCP execution
+
+Prefer the declared `CDT Express` remote MCP dependency for an AI chat session.
+If it is not connected, direct the user to add
+`https://mcp.riskthinking.ai/mcp` and complete VELO OAuth; never request an API
+key in chat. Inspect the connected tool list and schemas before calls. Resolve
+the company with `search_companies` and `get_company`, obtain its assets with
+`get_company_assets` or `get_all_company_assets`, then retrieve supported
+asset-level scores with `get_asset_climate_scores`. Read
+[references/playbook.md](references/playbook.md) before applying platform
+thresholds. Bound or confirm a large exhaustive run rather than silently making
+unbounded tool calls.
+
 ## Demo bootstrap
 
 This live enterprise skill does not require local portfolio files. Use the
-authorized MCP or SDK connection to resolve the requested company and discover
+authorized MCP connection, or the SDK fallback, to resolve the requested company and discover
 supported pathways and horizons. Ask the user to select among ambiguous matches.
 If no authorized connection is available, explain the prerequisite and stop;
 never present mocked classifications as live VELO results.

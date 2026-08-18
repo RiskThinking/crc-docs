@@ -12,6 +12,8 @@ Each open CRC baseline has a higher-calibre VELO/CDT enterprise twin.
 - Start with only the skill name; the AI will ask for the minimum information it needs
 - Optionally include the target or advanced assumptions you already know
 
+Note: to run an enterprise twin, connect the [`CDT Express MCP server`](https://github.com/RiskThinking/cdt-express-mcp) in your AI tool using `https://mcp.riskthinking.ai/mcp`, complete the VELO OAuth flow, and enable its tools for the chat. Do not paste an API key into the conversation. Each VELO/CDT skill declares this remote server as a dependency, discovers its supported tool schemas, and guides the relevant read-only calls.
+
 | Decision | Open CRC baseline | VELO/CDT enterprise twin |
 |---|---|---|
 | **Mortgage / collateral** | **Start:** `Use $crc-screen-mortgage-flood.`<br>**Optional:** `Use $crc-screen-mortgage-flood for Toronto, Canada.` | **Start:** `Use $velo-underwrite-property-climate.`<br>**Optional:** `Use $velo-underwrite-property-climate for 392 Markham Street, Toronto.` |
@@ -67,10 +69,14 @@ For an open baseline without supplied files, the AI should:
 5. Read scenario, units, support, and source version from canonical JRC metadata
    before evaluation; never guess or silently combine them.
 
-The VELO/CDT twins do not need local CSV or Parquet inputs. They require an
-authorized MCP connection or `velo-sdk` configuration, then discover companies,
-indices, assets, pathways, and horizons from the connected service. Never paste
-`RISKTHINKING_API_KEY` into a chat or substitute synthetic JSON for live evidence.
+The VELO/CDT twins do not need local CSV or Parquet inputs. Prefer the remote
+CDT Express MCP server at `https://mcp.riskthinking.ai/mcp`; its OAuth flow
+authorizes access without exposing a CDT key to the AI tool. The skills discover
+companies, indices, assets, pathways, and horizons from available tool schemas
+and responses. `velo-sdk` remains a local fallback for capabilities not exposed
+by the connected MCP version. Never paste `CDT_API_KEY` or
+`RISKTHINKING_API_KEY` into a chat or substitute synthetic JSON for live
+evidence.
 
 ## Run the open demonstration
 

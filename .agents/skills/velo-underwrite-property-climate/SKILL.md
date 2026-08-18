@@ -1,6 +1,6 @@
 ---
 name: velo-underwrite-property-climate
-description: Perform a higher-calibre property climate underwriting assessment through VELO/CDT using velo-sdk or an equivalent authorized MCP surface. Use for a named property or VELO asset when the user needs proprietary asset resolution, multi-factor climate impacts, future pathways and horizons, VaR/CVaR, or an enterprise twin to a CRC mortgage flood screen.
+description: Perform a higher-calibre property climate underwriting assessment through VELO/CDT using the remote CDT Express MCP server or velo-sdk. Use for a named property or VELO asset when the user needs proprietary asset resolution, multi-factor climate impacts, future pathways and horizons, VaR/CVaR, or an enterprise twin to a CRC mortgage flood screen.
 ---
 
 # VELO property climate underwriting
@@ -19,10 +19,23 @@ the choice would materially change the assessment. Do not ask for API IDs or raw
 scenario codes that the service can discover. Valid advanced inputs override
 defaults.
 
+## CDT Express MCP execution
+
+Prefer the declared `CDT Express` remote MCP dependency for an AI chat session.
+If it is not connected, direct the user to add
+`https://mcp.riskthinking.ai/mcp` and complete VELO OAuth; never request an API
+key in chat. Inspect the connected tool list and input schemas before calls.
+Use `search_assets`, `get_asset`, and `get_asset_climate_scores`; use the climate
+metric and distribution tools only when their schemas support the requested
+factor-level evidence. Read [references/playbook.md](references/playbook.md) for
+the current MCP sequence and SDK fallback. Do not invent missing tools or
+fields.
+
 ## Demo bootstrap
 
 This live enterprise skill does not require a local CSV or Parquet. If the user
-has not supplied an asset ID, use the authorized MCP or SDK connection to search
+has not supplied an asset ID, use the authorized MCP connection, or the SDK
+fallback, to search
 their property query, show candidates, and require a selection when ambiguous.
 If no authorized connection is available, explain the prerequisite and stop;
 never replace enterprise evidence with synthetic data.
