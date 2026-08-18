@@ -7,6 +7,17 @@ description: Triage a company's physical-asset portfolio using VELO's uninsurabl
 
 Use VELO classifications as platform signals, not as universal actuarial or underwriting policy.
 
+## Guided intake
+
+Treat `Use $velo-triage-portfolio-insurability` as a complete invocation. Reuse
+a clear company from the conversation; otherwise ask only for the company name
+or VELO company ID. Resolve candidates and supported pathways/horizons through
+the authorized connection. Select an unambiguous company, show a short list when
+identity is ambiguous, and recommend a relevant scenario or comparison rather
+than asking the user for raw platform codes. Ask a follow-up only when identity,
+scenario intent, or decision context is materially unclear. Valid advanced
+inputs override defaults.
+
 ## Demo bootstrap
 
 This live enterprise skill does not require local portfolio files. Use the

@@ -7,6 +7,18 @@ description: Assess company or market-index physical climate risk with VELO/CDT 
 
 Use VELO's asset and ownership intelligence to answer a business diligence question; preserve scenario and metric definitions.
 
+## Guided intake
+
+Treat `Use $velo-assess-company-climate-risk` as a complete invocation. Reuse a
+clear company, index, and decision context; otherwise ask one question: “Which
+company or market index should I assess, and what decision should it inform?”
+Resolve identity and supported pathways/horizons through the authorized
+connection. Choose only an unambiguous match, recommend a useful scenario
+comparison, and ask a concise follow-up only when identity or scenario intent
+is materially ambiguous. Do not ask non-experts for company IDs, index IDs, or
+raw scenario codes the service can discover. Valid advanced inputs override
+defaults.
+
 ## Demo bootstrap
 
 This live enterprise skill does not require local asset files. Use the authorized
