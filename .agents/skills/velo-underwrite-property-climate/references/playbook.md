@@ -7,7 +7,10 @@ chat-native run:
 
 1. Inspect the available tools and their schemas; supported scenario values are
    defined there and can change by server version.
-2. Call `search_assets` for a name/address, or `get_asset` for a known ID.
+2. Call `search_assets` for a name/address, or `get_asset` for a known ID. Honor
+   pagination, limits, and truncation metadata returned by the server. If only a
+   bounded subset is shown, disclose that it is partial and refine or paginate
+   the search before asking the user to select an asset.
 3. Call `get_asset_climate_scores` for the chosen pathway and horizon.
 4. When location-level factor evidence is needed and supported, use
    `get_climate_metrics_exposure`, `get_climate_metrics_impact`,
@@ -28,7 +31,10 @@ In `crc-docs`, install the optional client with `uv sync --extra velo`, then run
 
 ## Read-only route in velo-sdk 0.0.20
 
-1. Search or get the asset.
+1. Search or get the asset. The bundled script reads at most 11 matches, returns
+   at most 10 candidates, and reports `truncated: true` plus a match-count lower
+   bound when more exist. Refine the query rather than treating that list as
+   complete.
 2. Resolve its owner with `client.assets.get_asset_owner(asset_id)`.
 3. Read `client.companies.list_company_asset_climate_scores(owner.id, pathway, horizon)` and select the matching `asset_id`.
 4. Read `client.companies.list_company_asset_impact_scores(...)` and select the same asset.

@@ -16,7 +16,11 @@ data when available, and a report containing a decision table, chart, and map.
 - Start with only the skill name; the AI will ask for the minimum information it needs
 - Optionally include the target or advanced assumptions you already know
 
-Note: to run an enterprise twin, connect the [`CDT Express MCP server`](https://github.com/RiskThinking/cdt-express-mcp) in your AI tool using `https://mcp.riskthinking.ai/mcp`, complete the VELO OAuth flow, and enable its tools for the chat. Do not paste an API key into the conversation. Each VELO/CDT skill declares this remote server as a dependency, discovers its supported tool schemas, and guides the relevant read-only calls.
+The table uses Codex's `$skill-name` selector. In ChatGPT, select the skill with
+`@`; in Claude Code, use `/skill-name`. Plain language such as
+`Use the crc-screen-mortgage-flood skill` is the portable fallback.
+
+Note: to run an enterprise twin, connect the [`CDT Express MCP server`](https://github.com/RiskThinking/cdt-express-mcp) in your AI tool using `https://mcp.riskthinking.ai/mcp`, complete the VELO OAuth flow, and enable its tools for the chat. Do not paste an API key into the conversation. OpenAI reads the dependency from each enterprise skill's `agents/openai.yaml`; Claude Code reads the project-level [`.mcp.json`](.mcp.json). Each skill discovers the connected tool schemas and guides the relevant read-only calls.
 
 | Decision | Open CRC baseline | VELO/CDT enterprise twin |
 |---|---|---|
@@ -47,6 +51,12 @@ If you want the AI to choose for you, begin with:
 ```text
 Which CRC/VELO skill should I use for my climate-risk question?
 ```
+
+### Platform discovery
+
+- **ChatGPT/Codex:** the canonical skills live under [`.agents/skills`](.agents/skills); `agents/openai.yaml` adds OpenAI presentation metadata and the enterprise MCP dependency.
+- **Claude Code:** [`.claude/skills`](.claude/skills) points to the same canonical folders, so the skills are auto-discovered without duplicated playbooks. Approve the project MCP server and use `/mcp` once to complete VELO OAuth.
+- **claude.ai:** upload the desired canonical skill folder as a custom Skill and add CDT Express as a custom connector for enterprise runs. Project `.mcp.json` applies to Claude Code, not the claude.ai upload.
 
 ## Peel down into the playbooks
 

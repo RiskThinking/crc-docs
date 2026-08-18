@@ -13,11 +13,13 @@ Treat `Use $velo-underwrite-property-climate` as a complete invocation. Reuse a
 clear property from the conversation; otherwise ask only for a property name,
 address, or VELO asset ID. Search through the authorized connection, select
 automatically only when identity is unambiguous, and show a short candidate list
-when it is not. Discover supported pathways and horizons internally. Recommend
-a decision-relevant scenario or comparison and ask a concise follow-up only when
-the choice would materially change the assessment. Do not ask for API IDs or raw
-scenario codes that the service can discover. Valid advanced inputs override
-defaults.
+when it is not. For every bounded candidate list, disclose the returned count
+and whether more matches exist. If the list is truncated, ask for a refined
+query instead of presenting it as exhaustive. Discover supported pathways and
+horizons internally. Recommend a decision-relevant scenario or comparison and
+ask a concise follow-up only when the choice would materially change the
+assessment. Do not ask for API IDs or raw scenario codes that the service can
+discover. Valid advanced inputs override defaults.
 
 ## CDT Express MCP execution
 
@@ -42,7 +44,7 @@ never replace enterprise evidence with synthetic data.
 
 ## Workflow
 
-1. Require an existing VELO `asset_id` or search query. If search returns ambiguity, show candidates and stop for selection.
+1. Require an existing VELO `asset_id` or search query. If search returns ambiguity, show candidates and stop for selection. State whether the result is truncated; refine or paginate the search before selection when it is.
 2. Discover valid pathways and horizons from the connected tool or SDK. Never guess an allowed value.
 3. Resolve the asset and its owner. The public `velo-sdk` 0.0.20 reaches asset climate/impact scores through the owning company's asset lists; see [references/playbook.md](references/playbook.md).
 4. Run `scripts/underwrite_property.py` for a read-only SDK assessment, or use semantically equivalent authorized MCP tools.
