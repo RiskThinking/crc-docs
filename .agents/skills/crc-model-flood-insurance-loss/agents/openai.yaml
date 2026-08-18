@@ -1,0 +1,4 @@
+interface:
+  display_name: "CRC Flood Insurance Loss"
+  short_description: "Model open-data flood damage for insured assets"
+  default_prompt: "Use $crc-model-flood-insurance-loss to estimate flood damage ratios for this insured portfolio."

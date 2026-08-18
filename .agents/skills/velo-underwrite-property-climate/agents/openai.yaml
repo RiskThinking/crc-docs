@@ -1,0 +1,4 @@
+interface:
+  display_name: "VELO Property Climate Underwriting"
+  short_description: "Underwrite property with enterprise climate data"
+  default_prompt: "Use $velo-underwrite-property-climate to assess this property across VELO climate scenarios."
