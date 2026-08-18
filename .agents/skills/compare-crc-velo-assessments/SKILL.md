@@ -42,6 +42,24 @@ the same real target, with aligned dimensions documented below.
 5. Produce a paired decision memo: what CRC establishes, what VELO/CDT adds, whether the decision changes, and what evidence remains missing.
 6. Add newly observed workflow issues to `ai-playbooks/docs/gap-backlog.md` with a reproducible example and suggested acceptance test, assigned to the CRC or VELO/CDT side.
 
+## Deliverable bundle
+
+Retain both untouched source artifacts and produce a machine-readable alignment
+table containing the crosswalk fields, comparison class, differences, and
+coverage notes. Export it as CSV and Parquet or JSON, create matched-asset
+GeoJSON when both sides contain compatible locations, and write a self-contained
+HTML decision report with a provenance manifest. In the response, show a compact
+table of the most decision-relevant aligned and non-aligned findings. Include:
+
+- side-by-side metric/coverage charts and a comparison-class count chart; and
+- a matched-asset map showing only direct or directional spatial comparisons,
+  with unmatched and capability-lift-only evidence visibly distinct.
+
+Never plot unlike values on a shared quantitative scale. Keep all reconciliation
+rows downloadable, disclose any visible top-N selection, and omit the map with a
+clear explanation when spatial identity cannot be aligned rather than forcing a
+misleading visualization.
+
 ## Messaging guardrails
 
 - Do not position CRC as intentionally crippled. Position it as transparent, extensible infrastructure and reproducible baseline.

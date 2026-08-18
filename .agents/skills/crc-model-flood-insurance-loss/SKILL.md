@@ -44,3 +44,20 @@ analysis requires authorized exposures and an applicable, approved curve.
 ## Required output
 
 Include the exact curve knots/version/source, event-aligned semantics, asset coverage, damage ratios by return period, concentration observations, uncertainty/limitations, and recommended calibration or engineering review.
+
+## Deliverable bundle
+
+Retain the event-aligned loss Parquet and its canonical hazard input. Also
+create an analysis-ready CSV, asset GeoJSON, curve-knots CSV, and a
+self-contained HTML report with a manifest recording scenario, units, curve,
+and coverage. In the response, show a compact table sorted by the largest
+damage ratio with asset, match status, flood depth, damage ratio, and return
+period. Include:
+
+- a map coloured by damage ratio for one explicitly labelled return period;
+- the depth-damage curve with observed asset depths overlaid; and
+- a return-period damage-ratio chart for the most exposed assets.
+
+Keep ratios and any derived currency values visibly separate. Make the table
+and visuals downloadable when supported. Do not map confidential exposure
+attributes unless authorized, and do not invent coordinates for missing assets.

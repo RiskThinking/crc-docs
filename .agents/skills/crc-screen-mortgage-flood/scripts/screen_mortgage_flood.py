@@ -24,7 +24,7 @@ def parser() -> argparse.ArgumentParser:
         help="Optional path for the materialized canonical JRC hazard dataset",
     )
     p.add_argument("--periods", nargs="+", type=float, default=[25, 100, 500])
-    p.add_argument("--h3-resolution", type=int, default=10)
+    p.add_argument("--h3-resolution", type=int, default=9)
     p.add_argument("--cache-mode", choices=("reuse", "offline", "refresh", "stream"), default="reuse")
     p.add_argument("--workers", type=int, default=1, help="Explicit process count; raise only after profiling")
     p.add_argument("--plan-only", action="store_true", help="Explain without fetching or writing")

@@ -15,9 +15,10 @@ or assets already present in the conversation; otherwise ask one question:
 bounds, a JRC product, Overture filters, file paths, or return periods. Resolve a
 narrow AOI, choose EFAS within Europe and GloFAS elsewhere, source up to 10
 covered Overture candidates at confidence 0.8, and evaluate 25-, 100-, and
-500-year depths. Show these inferred demo choices and the lazy plan before
-materialization. User-supplied assets or valid advanced settings override the
-defaults.
+500-year depths. Use the repository's asset-level flood default of H3 resolution
+9 unless a valid advanced setting overrides it. Show these inferred demo choices
+and the lazy plan before materialization. User-supplied assets or valid advanced
+settings override the defaults.
 
 ## Demo bootstrap
 
@@ -44,6 +45,25 @@ verified collateral, ownership, occupancy, value, or insurance exposure.
 ## Required output
 
 Report scope, source/version, assets submitted/matched/unmatched, units, requested return periods, exposure observations, spatial precision, extrapolation, assumptions, and next action. Separate facts from policy judgments.
+
+## Deliverable bundle
+
+Retain the canonical hazard and asset-level Parquet output as the source of
+truth. Also create an analysis-ready CSV, a GeoJSON of matched and unmatched
+locations, and a self-contained HTML report; preserve metadata and warnings in
+a manifest. In the response, show a compact table sorted by the highest
+screening depth with asset, match status, spatial precision, and 25-, 100-, and
+500-year depths including units. Include:
+
+- a map using distinct symbols for matched, unmatched, and extrapolated assets,
+  coloured by a clearly named return-period depth; and
+- a return-period depth chart for the most exposed assets, without implying a
+  continuous forecast between events.
+
+Make the table, chart, and map downloadable separately when the host supports
+artifacts. Never place unverified Overture ownership or confidential collateral
+details in labels. If coordinates are unavailable, do not geocode silently;
+state why the map could not be produced.
 
 ## Boundaries
 

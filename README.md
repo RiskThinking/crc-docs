@@ -6,6 +6,10 @@ playbook, and only then descend into the open
 [`crc-framework`](https://pypi.org/project/crc-framework/) implementation.
 Each open CRC baseline has a higher-calibre VELO/CDT enterprise twin.
 
+Every completed skill run produces both an immediate visual result and a
+reusable output bundle: source-of-truth data, an analysis-ready table, spatial
+data when available, and a report containing a decision table, chart, and map.
+
 ## Start here: copy a prompt
 
 - Link [`RiskThinking/crc-docs`](https://github.com/RiskThinking/crc-docs) into an AI tool that can reference repository files
@@ -28,6 +32,15 @@ Use $compare-crc-velo-assessments.
 
 The skill will use the paired outputs already in the conversation when they are
 unambiguous. Advanced users can attach or name the two artifacts explicitly.
+
+### What every run returns
+
+The chat response shows a compact, unit-labelled results table and at least one
+decision-relevant chart. It also shows a map whenever the source contains
+coordinates or geometry; missing locations are reported rather than invented.
+Downloadable artifacts retain the full rows and provenance for secondary
+analysis—typically Parquet or JSON plus CSV, GeoJSON, visual files, and an HTML
+report. Enterprise artifacts remain private to the authorized workspace.
 
 If you want the AI to choose for you, begin with:
 

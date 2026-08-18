@@ -35,7 +35,7 @@ echo "Sourcing Overture candidates inside the JRC coverage..."
 uv run python pipelines/overture_assets_pipeline.py \
   --bounds "$min_lon" "$min_lat" "$max_lon" "$max_lat" \
   --coverage-hazard "$output_dir/jrc_depths_by_cell.parquet" \
-  --limit 5 \
+  --limit 10 \
   --output "$output_dir/overture-assets.csv"
 
 echo "Screening the Overture candidates against canonical JRC flood data..."

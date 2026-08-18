@@ -12,8 +12,9 @@ For a company:
 3. Retrieve owned assets with `get_company_assets` or, only when justified,
    `get_all_company_assets`.
 4. Use `get_asset_climate_scores` on a bounded decision-relevant asset set for
-   drivers and concentrations. Preserve excluded and failed assets as coverage
-   exceptions.
+   risk ranking and geographic or asset-type concentrations after joining asset
+   metadata. These scores are not factor attribution. Preserve excluded and
+   failed assets as coverage exceptions.
 
 For a market index:
 
@@ -21,14 +22,16 @@ For a market index:
 2. Retrieve the total with `get_market_index_climate_scores`.
 3. Use `get_market_index_companies_climate_scores` and
    `get_market_index_assets_climate_scores` with sorting and limits to identify
-   concentrations; use their `get_all_...` counterparts only for a justified
-   exhaustive export.
+   risk ranking and concentrations; do not label them as drivers. Use their
+   `get_all_...` counterparts only for a justified exhaustive export.
 
 Use `get_metrics_definition` when explaining unfamiliar score fields. Complete
 VELO OAuth and never request `CDT_API_KEY` in chat. If a needed factor,
 aggregation, or high-risk classification is not exposed by the connected MCP
 version, state the gap and use the SDK route only when locally configured and
-authorized.
+authorized. The current climate-score endpoints do not provide factor
+attribution; never infer it from score magnitude, ranking, country, or asset
+type.
 
 ## Local SDK fallback
 
@@ -53,7 +56,7 @@ Use the parallel `client.markets` methods: index lookup/list/search, companies, 
 1. Entity/index identity and asset snapshot.
 2. Scenario and horizon.
 3. Total metrics.
-4. Factor attribution.
+4. Factor attribution from explicit impact output, or a clear unavailable note.
 5. Geographic and asset-type concentrations.
 6. Tail-risk/high-risk assets.
 7. Coverage and identity exceptions.

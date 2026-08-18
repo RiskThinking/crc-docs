@@ -29,7 +29,9 @@ company or market search/detail tools to resolve the target, then the matching
 climate-score and constituent/asset-score tools. Read
 [references/playbook.md](references/playbook.md) for exact sequences. Prefer
 bounded, sorted calls for decision-relevant concentrations; confirm scope before
-exhaustive retrieval.
+exhaustive retrieval. Treat climate-score tools as risk metrics, not factor
+attribution. Report drivers only when an explicit impact/factor-attribution tool
+or SDK response supplies them.
 
 ## Demo bootstrap
 
@@ -45,10 +47,33 @@ not a substitute for this assessment.
 1. Resolve the company or market index. Show ambiguity and require selection rather than choosing silently.
 2. Discover supported pathways and horizons.
 3. Run `scripts/assess_company.py` with either `--company-id` or `--index-id`. Follow the method map in [references/playbook.md](references/playbook.md) when using equivalent MCP tools.
-4. Collect total climate score, factor impacts/attribution, country concentration, asset-type concentration, and high-risk assets where authorized.
+4. Collect total climate score, country concentration, asset-type concentration, and high-risk assets where authorized. Collect factor impacts/attribution only from an explicit impact or attribution response; if the active MCP surface has only climate scores, mark drivers unavailable.
 5. Compare pathways/horizons as separate scenario results. Never imply a scenario probability unless the platform supplies one.
 6. Explain the enterprise lift over CRC: ownership/material assets, broader/finer hazards, multi-factor modelling, future scenarios, aggregation, and benchmarks.
-7. Produce a diligence memo with evidence, coverage exceptions, concentrations, drivers, sensitivity, and actions.
+7. Produce a diligence memo with evidence, coverage exceptions, concentrations, available drivers, sensitivity, and actions. Never infer drivers from score magnitude or rank.
+
+## Deliverable bundle
+
+Retain the unmodified authorized MCP responses, or SDK export, as private JSON
+with tool and scenario provenance. Also create flattened analysis-ready CSVs for
+the target, scores, and in-scope constituents/assets; create GeoJSON when
+authorized locations are returned, plus a self-contained HTML report and
+manifest. In the response, show a compact table of total metrics, leading
+factors when explicitly returned, concentrations, comparison scenarios, and
+coverage exceptions. Label unavailable factor attribution rather than filling
+it with climate-score fields.
+Include:
+
+- a map of a disclosed, bounded set of material or highest-risk assets, or
+  server-provided geographic clusters; and
+- factor-attribution charts only when explicit impact/attribution data exists;
+  otherwise use climate-score distribution, scenario-comparison, and
+  country/asset-type concentration charts with compatible metrics and explicit
+  units.
+
+Keep exhaustive rows in downloadable artifacts rather than crowding the chat.
+Do not expose organization-private holdings outside the authorized workspace,
+and do not infer coordinates or ownership absent from CDT Express evidence.
 
 ## Safety
 
