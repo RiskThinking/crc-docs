@@ -1,4 +1,4 @@
 interface:
   display_name: "CRC Mortgage Flood Screen"
   short_description: "Screen mortgage collateral with open flood data"
-  default_prompt: "Use $crc-screen-mortgage-flood to screen this collateral file for open-data flood exposure."
+  default_prompt: "Use $crc-screen-mortgage-flood."

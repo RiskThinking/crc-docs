@@ -7,6 +7,18 @@ description: Screen residential or commercial mortgage collateral or Overture ca
 
 Produce a screening result, not an automated lending decision.
 
+## Guided intake
+
+Treat `Use $crc-screen-mortgage-flood` as a complete invocation. Reuse a target
+or assets already present in the conversation; otherwise ask one question:
+“Which property, city, or region should I screen?” Do not ask a non-expert for
+bounds, a JRC product, Overture filters, file paths, or return periods. Resolve a
+narrow AOI, choose EFAS within Europe and GloFAS elsewhere, source up to 10
+covered Overture candidates at confidence 0.8, and evaluate 25-, 100-, and
+500-year depths. Show these inferred demo choices and the lazy plan before
+materialization. User-supplied assets or valid advanced settings override the
+defaults.
+
 ## Demo bootstrap
 
 When the user names an area but supplies no assets, establish and show narrow

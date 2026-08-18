@@ -7,6 +7,19 @@ description: Apply an explicit depth-damage function to a CRC canonical flood da
 
 Model hazard-to-damage transparently. Do not call the result a premium, technical price, reserve, or regulatory capital requirement.
 
+## Guided intake
+
+Treat `Use $crc-model-flood-insurance-loss` as a complete invocation. Reuse
+clear targets and attachments; otherwise ask one question: “Which portfolio or
+area should I assess, and is this an exploratory demonstration or a
+decision-facing analysis?” For a demonstration, infer the narrow AOI, JRC
+EFAS/GloFAS source, covered Overture candidates, standard return periods, and
+the illustrative curve documented below. Do not ask for bounds, paths, source
+products, or raw scenario identifiers. For decision-facing work, require an
+authorized exposure set and approved curve. Read pathway and horizon from
+metadata; if several valid scenarios remain, recommend a concise choice and ask
+only then. Never mix scenarios. Valid advanced inputs override defaults.
+
 ## Demo bootstrap
 
 When the user supplies no files, materialize canonical JRC EFAS/GloFAS for a

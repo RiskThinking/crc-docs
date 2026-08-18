@@ -7,6 +7,18 @@ description: Perform a higher-calibre property climate underwriting assessment t
 
 Use enterprise data to deepen a CRC baseline; do not turn a platform score into an automatic lending decision.
 
+## Guided intake
+
+Treat `Use $velo-underwrite-property-climate` as a complete invocation. Reuse a
+clear property from the conversation; otherwise ask only for a property name,
+address, or VELO asset ID. Search through the authorized connection, select
+automatically only when identity is unambiguous, and show a short candidate list
+when it is not. Discover supported pathways and horizons internally. Recommend
+a decision-relevant scenario or comparison and ask a concise follow-up only when
+the choice would materially change the assessment. Do not ask for API IDs or raw
+scenario codes that the service can discover. Valid advanced inputs override
+defaults.
+
 ## Demo bootstrap
 
 This live enterprise skill does not require a local CSV or Parquet. If the user

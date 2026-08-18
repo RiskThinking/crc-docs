@@ -7,6 +7,19 @@ description: Assess a user-supplied portfolio or Overture candidate locations ag
 
 Keep per-hazard results auditable and refuse to fabricate a combined portfolio score.
 
+## Guided intake
+
+Treat `Use $crc-assess-asset-portfolio-risk` as a complete invocation. Reuse a
+clear target, portfolio, and decision context; otherwise ask one question:
+“Which portfolio or geographic area should I assess, and what decision should
+the screen inform?” For a generic geographic demonstration, default to riverine
+flood, resolve a narrow AOI, choose EFAS in Europe or GloFAS elsewhere, and
+source up to 10 covered Overture candidates at confidence 0.8. Add EDO drought
+when the question or geography makes it relevant. Do not ask non-experts for
+bounds, H3 resolution, adapters, file paths, raw scenario identifiers, or
+Overture categories unless a material ambiguity remains. State inferred choices
+before materialization; valid advanced inputs override them.
+
 ## Demo bootstrap
 
 When no inputs are supplied, materialize JRC flood through the EFAS/GloFAS

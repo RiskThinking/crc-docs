@@ -9,40 +9,39 @@ Each open CRC baseline has a higher-calibre VELO/CDT enterprise twin.
 ## Start here: copy a prompt
 
 - Link [`RiskThinking/crc-docs`](https://github.com/RiskThinking/crc-docs) into an AI tool that can reference repository files
-- Copy a prompt from the table below
-- Replace `{placeholders}` for desired targets (e.g. `{city}, {country}` to `Toronto, Canada`)
+- Start with only the skill name; the AI will ask for the minimum information it needs
+- Optionally include the target or advanced assumptions you already know
 
 | Decision | Open CRC baseline | VELO/CDT enterprise twin |
 |---|---|---|
-| **Mortgage / collateral** | Use `$crc-screen-mortgage-flood` for `{city}, {country}`. Resolve and show narrow WGS84 bounds. Choose JRC EFAS for Europe or GloFAS elsewhere, show the lazy plan, and ask before materializing it. Then source up to `{10}` relevant candidates from the latest Overture Places release, filtered to JRC source-geometry coverage. Report category, confidence, release, and that these are not verified collateral. Evaluate 25-, 100-, and 500-year flood depths; do not make a lending decision. | Use `$velo-underwrite-property-climate` for `{property name or VELO asset ID}` in `{city}, {country}`. Discover valid pathways and horizons, show ambiguous matches for selection, then assess `{pathway}` at `{horizon}`. Report identity evidence, multi-factor drivers, tail-risk metrics, and what the enterprise result adds beyond the JRC screen. |
-| **Insurance** | Use `$crc-model-flood-insurance-loss` for open candidate locations in `{city}, {country}`. Materialize canonical JRC flood data, then source Overture candidates for the same bounds filtered to modeled JRC coverage. Read pathway and horizon from the metadata. Use our approved `{depth/damage knots}`; if none are supplied, use the repository's illustrative knots and label the result non-production. Preserve event-aligned return periods and state that Overture candidates are not an insured portfolio. | Use `$velo-triage-portfolio-insurability` for `{company or company ID}` under `{pathway}` at `{horizon}`. Resolve supported values first. List VELO-classified uninsurable and stranded assets, overlap, countries, asset types, and coverage exceptions. Keep platform classifications separate from underwriting policy. |
-| **Corporate finance / investment** | Use `$crc-assess-asset-portfolio-risk` for `{city/region}`. Resolve and show bounds, then materialize applicable JRC hazards: EFAS/GloFAS flood and, when relevant, EDO drought. Source Overture candidates inside hazard coverage using categories relevant to `{business question}`; disclose that ownership and materiality are unverified. Keep hazards separate when horizons or semantics differ and do not fabricate a combined score. | Use `$velo-assess-company-climate-risk` for `{company}` or market index `{index}`. Show matching candidates before selection. Compare `{pathway A}` with `{pathway B}` at `{horizon}`, then report total score, factor attribution, country concentration, asset-type concentration, coverage exceptions, and the capability lift over the Overture/JRC baseline. |
+| **Mortgage / collateral** | **Start:** `Use $crc-screen-mortgage-flood.`<br>**Optional:** `Use $crc-screen-mortgage-flood for Toronto, Canada.` | **Start:** `Use $velo-underwrite-property-climate.`<br>**Optional:** `Use $velo-underwrite-property-climate for 392 Markham Street, Toronto.` |
+| **Insurance** | **Start:** `Use $crc-model-flood-insurance-loss.`<br>**Optional:** `Use $crc-model-flood-insurance-loss for Rotterdam using my attached portfolio and approved depth-damage curve.` | **Start:** `Use $velo-triage-portfolio-insurability.`<br>**Optional:** `Use $velo-triage-portfolio-insurability for Example Insurance Holdings.` |
+| **Corporate finance / investment** | **Start:** `Use $crc-assess-asset-portfolio-risk.`<br>**Optional:** `Use $crc-assess-asset-portfolio-risk for Frankfurt, with flood and drought.` | **Start:** `Use $velo-assess-company-climate-risk.`<br>**Optional:** `Use $velo-assess-company-climate-risk for the S&P 500.` |
 
 After running both sides for the same real target:
 
 ```text
-Use $compare-crc-velo-assessments on {crc-output.parquet} and
-{velo-output.json}. Align asset/entity, hazard/factor, pathway, horizon, metric,
-unit, spatial precision, and source version. Classify each comparison as direct,
-directional, capability-lift-only, or not comparable. Explain whether the added
-enterprise evidence changes the decision and record reproducible gaps.
+Use $compare-crc-velo-assessments.
 ```
+
+The skill will use the paired outputs already in the conversation when they are
+unambiguous. Advanced users can attach or name the two artifacts explicitly.
 
 If you want the AI to choose for you, begin with:
 
 ```text
-Inspect .agents/skills/ in this repository. For my
-{mortgage / insurance / investment} question, recommend an open CRC skill and
-its VELO/CDT twin, explain the evidence each can provide, and list required
-approvals or credentials. Do not materialize data yet.
+Which CRC/VELO skill should I use for my climate-risk question?
 ```
 
 ## Peel down into the playbooks
 
-The prompt gives the AI the decision and target. The selected `SKILL.md` supplies
-the workflow, guardrails, scripts, and deeper domain reference. An agent should
-load the selected pair—not every skill in the repository—and add the comparison
-skill only after both outputs exist.
+A bare skill invocation starts a guided intake. The selected `SKILL.md` owns the
+workflow, guardrails, scripts, and safe defaults—including source, bounds,
+scenario discovery, and demo configuration—so non-experts are not asked for
+technical parameters the AI can determine. Any values supplied by an advanced
+user override those defaults when valid. An agent should load the selected
+pair—not every skill in the repository—and add the comparison skill only after
+both outputs exist.
 
 | Decision | Load these playbooks |
 |---|---|

@@ -7,6 +7,18 @@ description: Reconcile an open CRC climate-risk assessment with its VELO/CDT ent
 
 Make the open/proprietary relationship credible by preserving both provenance and non-equivalence.
 
+## Guided intake
+
+Treat `Use $compare-crc-velo-assessments` as a complete invocation. First look
+for one CRC result and one VELO/CDT result already identified in the conversation
+or attached files. If the pair is unambiguous, proceed without another question.
+Otherwise ask the user to identify or attach the two results; if one side does
+not exist, recommend the appropriate twin skill. Infer the semantic crosswalk
+from metadata and report uncertainty instead of asking a non-expert to specify
+alignment fields or comparison classes. Advanced users may provide explicit
+artifacts, alignment constraints, or decision criteria, which override inferred
+defaults when valid.
+
 ## Demo bootstrap
 
 For a zero-credential file-handling smoke test, first run

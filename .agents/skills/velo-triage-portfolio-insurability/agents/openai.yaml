@@ -1,4 +1,4 @@
 interface:
   display_name: "VELO Portfolio Insurability Triage"
   short_description: "Triage uninsurable and stranded portfolio assets"
-  default_prompt: "Use $velo-triage-portfolio-insurability to identify climate-driven insurability concerns in this portfolio."
+  default_prompt: "Use $velo-triage-portfolio-insurability."
