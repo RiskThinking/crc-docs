@@ -9,7 +9,9 @@ Use enterprise data to deepen a CRC baseline; do not turn a platform score into 
 
 ## Guided intake
 
-Treat `Use $velo-underwrite-property-climate` as a complete invocation. Reuse a
+Treat naming this skill in plain language, or any platform selector
+(`$velo-underwrite-property-climate`, `/velo-underwrite-property-climate`,
+`@velo-underwrite-property-climate`), as a complete invocation. Reuse a
 clear property from the conversation; otherwise ask only for a property name,
 address, or VELO asset ID. Search through the authorized connection, select
 automatically only when identity is unambiguous, and show a short candidate list

@@ -9,7 +9,9 @@ Make the open/proprietary relationship credible by preserving both provenance an
 
 ## Guided intake
 
-Treat `Use $compare-crc-velo-assessments` as a complete invocation. First look
+Treat naming this skill in plain language, or any platform selector
+(`$compare-crc-velo-assessments`, `/compare-crc-velo-assessments`,
+`@compare-crc-velo-assessments`), as a complete invocation. First look
 for one CRC result and one VELO/CDT result already identified in the conversation
 or attached files. If the pair is unambiguous, proceed without another question.
 Otherwise ask the user to identify or attach the two results; if one side does

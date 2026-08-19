@@ -6,6 +6,8 @@ on:
       - ".agents/skills/**"
       - ".claude/skills"
       - ".mcp.json"
+      - "AGENTS.md"
+      - "CLAUDE.md"
       - ".github/workflows/validate-skills.yml"
   push:
     branches:
@@ -14,6 +16,8 @@ on:
       - ".agents/skills/**"
       - ".claude/skills"
       - ".mcp.json"
+      - "AGENTS.md"
+      - "CLAUDE.md"
       - ".github/workflows/validate-skills.yml"
   workflow_dispatch:
 
@@ -38,6 +42,10 @@ jobs:
             echo ".claude/skills must point to ../.agents/skills" >&2
             exit 1
           fi
+          if [[ "$(cat CLAUDE.md)" != "@AGENTS.md" ]]; then
+            echo "CLAUDE.md must import AGENTS.md via a single '@AGENTS.md' line" >&2
+            exit 1
+          fi
           python -m json.tool .mcp.json >/dev/null
           shopt -s nullglob
           skills=(.agents/skills/*)
@@ -47,4 +55,9 @@ jobs:
           fi
           for skill in "${skills[@]}"; do
             uvx --from "skills-ref==0.1.1" agentskills validate "$skill"
+            name="$(basename "$skill")"
+            if ! grep -q "$name" AGENTS.md; then
+              echo "AGENTS.md is missing an entry for skill '$name'" >&2
+              exit 1
+            fi
           done

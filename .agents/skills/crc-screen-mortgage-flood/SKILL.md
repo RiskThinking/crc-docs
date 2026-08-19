@@ -9,7 +9,9 @@ Produce a screening result, not an automated lending decision.
 
 ## Guided intake
 
-Treat `Use $crc-screen-mortgage-flood` as a complete invocation. Reuse a target
+Treat naming this skill in plain language, or any platform selector
+(`$crc-screen-mortgage-flood`, `/crc-screen-mortgage-flood`,
+`@crc-screen-mortgage-flood`), as a complete invocation. Reuse a target
 or assets already present in the conversation; otherwise ask one question:
 “Which property, city, or region should I screen?” Do not ask a non-expert for
 bounds, a JRC product, Overture filters, file paths, or return periods. Resolve a

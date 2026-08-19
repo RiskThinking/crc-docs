@@ -9,7 +9,9 @@ Keep per-hazard results auditable and refuse to fabricate a combined portfolio s
 
 ## Guided intake
 
-Treat `Use $crc-assess-asset-portfolio-risk` as a complete invocation. Reuse a
+Treat naming this skill in plain language, or any platform selector
+(`$crc-assess-asset-portfolio-risk`, `/crc-assess-asset-portfolio-risk`,
+`@crc-assess-asset-portfolio-risk`), as a complete invocation. Reuse a
 clear target, portfolio, and decision context; otherwise ask one question:
 “Which portfolio or geographic area should I assess, and what decision should
 the screen inform?” For a generic geographic demonstration, default to riverine

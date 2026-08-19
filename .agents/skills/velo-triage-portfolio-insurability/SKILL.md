@@ -9,7 +9,9 @@ Use VELO classifications as platform signals, not as universal actuarial or unde
 
 ## Guided intake
 
-Treat `Use $velo-triage-portfolio-insurability` as a complete invocation. Reuse
+Treat naming this skill in plain language, or any platform selector
+(`$velo-triage-portfolio-insurability`, `/velo-triage-portfolio-insurability`,
+`@velo-triage-portfolio-insurability`), as a complete invocation. Reuse
 a clear company from the conversation; otherwise ask only for the company name
 or VELO company ID. Resolve candidates and supported pathways/horizons through
 the authorized connection. Select an unambiguous company, show a short list when

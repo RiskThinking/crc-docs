@@ -18,7 +18,22 @@ data when available, and a report containing a decision table, chart, and map.
 
 The table uses Codex's `$skill-name` selector. In ChatGPT, select the skill with
 `@`; in Claude Code, use `/skill-name`. Plain language such as
-`Use the crc-screen-mortgage-flood skill` is the portable fallback.
+`Use the crc-screen-mortgage-flood skill` is the portable fallback and works
+everywhere, with or without a selector.
+
+**If your AI tool has no repository connector** (for example, you only pasted
+this repo's URL into a chat with no file access — a bare URL is not enough for
+most tools to read its contents), ask it to fetch the raw skill file and follow
+it directly:
+
+```text
+Fetch https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/crc-screen-mortgage-flood/SKILL.md
+and follow it as your operating instructions for the rest of this conversation.
+```
+
+This works with any tool that has a URL-fetch or browsing capability, Claude
+included. Swap in the path to any skill under [`.agents/skills`](.agents/skills)
+(see [`AGENTS.md`](AGENTS.md) for the full list).
 
 Note: to run an enterprise twin, connect the [`CDT Express MCP server`](https://github.com/RiskThinking/cdt-express-mcp) in your AI tool using `https://mcp.riskthinking.ai/mcp`, complete the VELO OAuth flow, and enable its tools for the chat. Do not paste an API key into the conversation. OpenAI reads the dependency from each enterprise skill's `agents/openai.yaml`; Claude Code reads the project-level [`.mcp.json`](.mcp.json). Each skill discovers the connected tool schemas and guides the relevant read-only calls.
 
@@ -55,8 +70,10 @@ Which CRC/VELO skill should I use for my climate-risk question?
 ### Platform discovery
 
 - **ChatGPT/Codex:** the canonical skills live under [`.agents/skills`](.agents/skills); `agents/openai.yaml` adds OpenAI presentation metadata and the enterprise MCP dependency.
-- **Claude Code:** [`.claude/skills`](.claude/skills) points to the same canonical folders, so the skills are auto-discovered without duplicated playbooks. Approve the project MCP server and use `/mcp` once to complete VELO OAuth.
+- **Claude Code:** [`.claude/skills`](.claude/skills) points to the same canonical folders, so the skills are auto-discovered without duplicated playbooks, once this repository is your working directory. The root [`CLAUDE.md`](CLAUDE.md) imports [`AGENTS.md`](AGENTS.md) (via `@AGENTS.md`) so the skill list and invocation conventions load into context automatically too. Approve the project MCP server and use `/mcp` once to complete VELO OAuth.
+- **Other file-aware agents (Cursor, Aider, Amp, etc.):** [`AGENTS.md`](AGENTS.md) is the generic entry point most of these tools auto-read from the repository root; it points at the same canonical `.agents/skills` folders.
 - **claude.ai:** upload the desired canonical skill folder as a custom Skill and add CDT Express as a custom connector for enterprise runs. Project `.mcp.json` applies to Claude Code, not the claude.ai upload.
+- **Any chat-only tool with no repository connector:** a bare URL mention does not give most AI tools file access. Use the raw-file fetch prompt above — it works wherever the tool can fetch a URL, regardless of platform.
 
 ## Peel down into the playbooks
 

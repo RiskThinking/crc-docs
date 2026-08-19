@@ -9,7 +9,9 @@ Use VELO's asset and ownership intelligence to answer a business diligence quest
 
 ## Guided intake
 
-Treat `Use $velo-assess-company-climate-risk` as a complete invocation. Reuse a
+Treat naming this skill in plain language, or any platform selector
+(`$velo-assess-company-climate-risk`, `/velo-assess-company-climate-risk`,
+`@velo-assess-company-climate-risk`), as a complete invocation. Reuse a
 clear company, index, and decision context; otherwise ask one question: “Which
 company or market index should I assess, and what decision should it inform?”
 Resolve identity and supported pathways/horizons through the authorized

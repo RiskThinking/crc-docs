@@ -9,7 +9,9 @@ Model hazard-to-damage transparently. Do not call the result a premium, technica
 
 ## Guided intake
 
-Treat `Use $crc-model-flood-insurance-loss` as a complete invocation. Reuse
+Treat naming this skill in plain language, or any platform selector
+(`$crc-model-flood-insurance-loss`, `/crc-model-flood-insurance-loss`,
+`@crc-model-flood-insurance-loss`), as a complete invocation. Reuse
 clear targets and attachments; otherwise ask one question: “Which portfolio or
 area should I assess, and is this an exploratory demonstration or a
 decision-facing analysis?” For a demonstration, infer the narrow AOI, JRC
