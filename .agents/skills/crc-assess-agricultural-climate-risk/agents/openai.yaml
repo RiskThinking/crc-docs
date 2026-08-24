@@ -1,0 +1,5 @@
+interface:
+  display_name: "CRC Agricultural Climate Risk"
+  short_description: "Screen crop and field layers against hazards"
+  default_prompt: "Use $crc-assess-agricultural-climate-risk for my sourcing region."
+

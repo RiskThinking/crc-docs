@@ -42,6 +42,7 @@ Note: to run an enterprise twin, connect the [`CDT Express MCP server`](https://
 | **Mortgage / collateral** | **Start:** `Use $crc-screen-mortgage-flood.`<br>**Optional:** `Use $crc-screen-mortgage-flood for Toronto, Canada.` | **Start:** `Use $velo-underwrite-property-climate.`<br>**Optional:** `Use $velo-underwrite-property-climate for 392 Markham Street, Toronto.` |
 | **Insurance** | **Start:** `Use $crc-model-flood-insurance-loss.`<br>**Optional:** `Use $crc-model-flood-insurance-loss for Rotterdam using my attached portfolio and approved depth-damage curve.` | **Start:** `Use $velo-triage-portfolio-insurability.`<br>**Optional:** `Use $velo-triage-portfolio-insurability for Example Insurance Holdings.` |
 | **Corporate finance / investment** | **Start:** `Use $crc-assess-asset-portfolio-risk.`<br>**Optional:** `Use $crc-assess-asset-portfolio-risk for Frankfurt, with flood and drought.` | **Start:** `Use $velo-assess-company-climate-risk.`<br>**Optional:** `Use $velo-assess-company-climate-risk for the S&P 500.` |
+| **Agricultural sourcing / crop exposure** | **Start:** `Use $crc-assess-agricultural-climate-risk.`<br>**Optional:** `Use $crc-assess-agricultural-climate-risk for corn and soybeans near Ames, Iowa.` | Use the company/portfolio twin when ownership, suppliers, values, or enterprise scenarios are required. |
 
 After running both sides for the same real target:
 
@@ -90,6 +91,7 @@ both outputs exist.
 | Mortgage / collateral | [`crc-screen-mortgage-flood`](.agents/skills/crc-screen-mortgage-flood/SKILL.md) → [`velo-underwrite-property-climate`](.agents/skills/velo-underwrite-property-climate/SKILL.md) |
 | Insurance | [`crc-model-flood-insurance-loss`](.agents/skills/crc-model-flood-insurance-loss/SKILL.md) → [`velo-triage-portfolio-insurability`](.agents/skills/velo-triage-portfolio-insurability/SKILL.md) |
 | Corporate finance / investment | [`crc-assess-asset-portfolio-risk`](.agents/skills/crc-assess-asset-portfolio-risk/SKILL.md) → [`velo-assess-company-climate-risk`](.agents/skills/velo-assess-company-climate-risk/SKILL.md) |
+| Agricultural sourcing / crop exposure | [`crc-assess-agricultural-climate-risk`](.agents/skills/crc-assess-agricultural-climate-risk/SKILL.md) plus the [agricultural playbook](ai-playbooks/agricultural-climate-risk.md) |
 | Reconciliation / sales engineering | [`compare-crc-velo-assessments`](.agents/skills/compare-crc-velo-assessments/SKILL.md) |
 
 For an open baseline without supplied files, the AI should:
@@ -202,6 +204,7 @@ These workflows acquire and canonicalize hazard data for a selected geography.
 | [`notebooks/flood_risk_by_province.ipynb`](notebooks/flood_risk_by_province.ipynb) | [`pipelines/flood_admin_pipeline.py`](pipelines/flood_admin_pipeline.py) | EFAS area selection → pinned AOI cache → canonical curves → H3/admin join → Overture places → PMTiles |
 | [`notebooks/jrc_global_flood_hazard.ipynb`](notebooks/jrc_global_flood_hazard.ipynb) | [`pipelines/jrc_flood_pipeline.py`](pipelines/jrc_flood_pipeline.py) | EFAS/GloFAS selection → pinned AOI cache → fitted curves → return-period evaluation |
 | [`notebooks/jrc_edo_drought_index.ipynb`](notebooks/jrc_edo_drought_index.ipynb) | [`pipelines/jrc_drought_pipeline.py`](pipelines/jrc_drought_pipeline.py) | EDO SMI area/year selection → annual-minimum AOI cache → lower-tail curves → support-aware evaluation |
+| [`notebooks/agricultural_climate_risk.ipynb`](notebooks/agricultural_climate_risk.ipynb) | [`pipelines/agricultural_climate_pipeline.py`](pipelines/agricultural_climate_pipeline.py) | Bounded USDA crop samples or FTW field polygons → canonical hazard evaluation → source-aware maps and weighted summaries → PMTiles |
 
 ### Asset portfolio analytics
 
