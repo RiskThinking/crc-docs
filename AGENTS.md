@@ -14,6 +14,7 @@ repository discovery; see README.md's "Platform discovery" section.
 | crc-screen-mortgage-flood | [.agents/skills/crc-screen-mortgage-flood/SKILL.md](.agents/skills/crc-screen-mortgage-flood/SKILL.md) |
 | crc-model-flood-insurance-loss | [.agents/skills/crc-model-flood-insurance-loss/SKILL.md](.agents/skills/crc-model-flood-insurance-loss/SKILL.md) |
 | crc-assess-asset-portfolio-risk | [.agents/skills/crc-assess-asset-portfolio-risk/SKILL.md](.agents/skills/crc-assess-asset-portfolio-risk/SKILL.md) |
+| crc-assess-agricultural-climate-risk | [.agents/skills/crc-assess-agricultural-climate-risk/SKILL.md](.agents/skills/crc-assess-agricultural-climate-risk/SKILL.md) |
 | velo-underwrite-property-climate | [.agents/skills/velo-underwrite-property-climate/SKILL.md](.agents/skills/velo-underwrite-property-climate/SKILL.md) |
 | velo-triage-portfolio-insurability | [.agents/skills/velo-triage-portfolio-insurability/SKILL.md](.agents/skills/velo-triage-portfolio-insurability/SKILL.md) |
 | velo-assess-company-climate-risk | [.agents/skills/velo-assess-company-climate-risk/SKILL.md](.agents/skills/velo-assess-company-climate-risk/SKILL.md) |
