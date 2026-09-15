@@ -5,7 +5,7 @@ Canonical skill definitions live under [`.agents/skills/`](.agents/skills), one
 `AGENTS.md` (Codex, Cursor, Aider, Amp, and similar) discover the skills
 without any manual linking step. Claude Code loads this file through
 `@AGENTS.md` in the root [`CLAUDE.md`](CLAUDE.md). claude.ai has no automatic
-repository discovery; see README.md's "Platform discovery" section.
+repository discovery; see [platform discovery](ai-playbooks/docs/setup.md#platform-discovery).
 
 ## Skills
 
@@ -19,6 +19,14 @@ repository discovery; see README.md's "Platform discovery" section.
 | velo-triage-portfolio-insurability | [.agents/skills/velo-triage-portfolio-insurability/SKILL.md](.agents/skills/velo-triage-portfolio-insurability/SKILL.md) |
 | velo-assess-company-climate-risk | [.agents/skills/velo-assess-company-climate-risk/SKILL.md](.agents/skills/velo-assess-company-climate-risk/SKILL.md) |
 | compare-crc-velo-assessments | [.agents/skills/compare-crc-velo-assessments/SKILL.md](.agents/skills/compare-crc-velo-assessments/SKILL.md) |
+
+## Canonical source and freshness
+
+Follow the selected skill's refresh bootstrap before an assessment. Resolve
+`RiskThinking/crc-docs` once and use its skill, references and scripts from the
+same commit; see [the refresh contract](ai-playbooks/docs/skill-refresh.md).
+Explicit user pins and local development requests take precedence. Never replace
+local edits or claim an installed copy is current without verifying the source.
 
 ## Invoking a skill
 
@@ -42,5 +50,5 @@ https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/<ski
 For enterprise (VELO/CDT) skills, also connect the CDT Express MCP server at
 `https://mcp.riskthinking.ai/mcp` — see [`.mcp.json`](.mcp.json) and README.md.
 
-See [README.md](README.md) for the full walkthrough, enterprise MCP setup,
-and per-platform discovery notes.
+See [README.md](README.md) for the problem-to-code map and
+[setup](ai-playbooks/docs/setup.md) for enterprise MCP and platform discovery.

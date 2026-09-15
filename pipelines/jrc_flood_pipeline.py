@@ -71,7 +71,7 @@ def main() -> None:
     table = read_hazard_dataset(hazard.provider.source)
     cells = table["cell_index"].to_pylist()
     print(
-        f"wrote {hazard_path}: {table.num_rows:,} fitted curves "
+        f"wrote {hazard_path}: {table.num_rows:,} canonical rows "
         f"from JRC {hazard.materialization.source_version}"
     )
     probabilities = return_periods_to_probabilities(
@@ -80,10 +80,17 @@ def main() -> None:
     )
     for period, probability in zip(args.return_periods, probabilities):
         by_cell: dict[int, float] = {}
+        missing = 0
         for cell, depth in zip(cells, curve_quantiles_at(table, probability)):
+            if depth is None:
+                missing += 1
+                continue
             by_cell[cell] = max(depth, by_cell.get(cell, float("-inf")))
-        peak = max(by_cell.values()) if by_cell else 0.0
-        print(f"  RP{period}: {len(by_cell):,} cells, max depth {peak:.2f} m")
+        summary = f"{max(by_cell.values()):.2f} m" if by_cell else "unavailable"
+        print(
+            f"  RP{period}: {len(by_cell):,} cells with values, max depth {summary}; "
+            f"{missing:,} source rows without values"
+        )
 
 
 if __name__ == "__main__":

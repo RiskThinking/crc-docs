@@ -1,27 +1,46 @@
 # Capability matrix
 
-Status reflects the public package surfaces verified on 2026-08-18 plus the product context supplied for this project.
+Baseline checked on 2026-09-15: published [crc-sdk 0.7.1](https://pypi.org/project/crc-sdk/0.7.1/)
+and [crc-framework 0.2.5](https://pypi.org/project/crc-framework/0.2.5/).
+The repository lockfile pins the tested environment. Runtime validation and its
+limits are recorded in [verification](dogfood-verification.md).
 
-| Capability | CRC open stack | VELO/CDT enterprise | Demonstration implication |
-|---|---|---|---|
-| Computation core | Distributions, explicit curve fitting, impact transforms, microscores, spanning sets, VaR/CVaR, attribution | Enterprise scores and impacts are delivered through VELO/CDT | Explain CRC as the open computational foundation and VELO/CDT as the industrialized data/product layer |
-| Flood data | JRC GloFAS and EFAS lazy ingestion and canonicalization | Broader proprietary hazard catalogue and finer coverage | Pair every open flood screen with a multi-hazard enterprise run |
-| Drought data | JRC EDO Soil Moisture Index workflow | Broader hazard/scenario coverage | Use CRC for transparent drought screening; use VELO/CDT when business impact needs multiple interacting factors |
-| Agricultural layers | Bounded USDA CDL crop-class scans (2008–2025) and FTW field-boundary scans (2024–2025) through the lazy DuckDB process seam | Entity, ownership, supplier, value, and broader scenario context where available | Treat crop cover and predicted field units as separate evidence—not yield, ownership, or a combined farm-risk score |
-| Arbitrary data | Canonical Parquet; GeoTIFF/COG, Zarr, NetCDF, DuckDB/Arrow and geometry primitives | API/MCP-managed datasets and assets | CRC can onboard customer/open data, but needs more high-level recipes and validation |
-| OS-Climate | Provider code exists; project context says the feed is currently unplugged | Not required for the proprietary route | Mark unavailable until a live integration test passes |
-| Asset input | Caller supplies assets, or AI sources Overture candidate locations by AOI/category for an open demonstration | Public and organization companies/assets, ownership, indexes | Overture supports geographic screening but does not establish ownership, materiality, collateral, value, or portfolio membership |
-| Hazard breadth | Currently concrete public workflows for riverine flood and SMI drought | Product site states 50+ hazards and multi-factor scenario data | Do not imply CRC parity; show the delta explicitly |
-| Scenario support | Canonical horizon/pathway fields; depends on source data | Pathways and decadal horizons exposed by SDK | Align scenarios before comparison; historical JRC results are not future-scenario equivalents |
-| Spatial precision | H3 plus exact source-geometry refinement when WKB is present | Asset-level proprietary data and finer hazard granularity | Report `spatial_match` and source resolution in the baseline |
-| Portfolio metrics | Low-level binary outcomes, spanning sets, VaR/CVaR; single-dataset portfolio evaluation | Company/index scores, asset scores, country/type aggregation, impact attribution | CRC needs a high-level multi-hazard portfolio workflow |
-| Insurability | User-defined impact curves and transparent risk primitives | SDK exposes “uninsurable” (`cvar_95 >= 0.35`) and “stranded” (`cvar_95 >= 0.75`) company-asset lists | Treat VELO labels as platform classifications, not universal actuarial definitions |
-| Evidence and provenance | Canonical hazard/evaluation metadata and pinned source caches | API responses; public SDK does not expose a complete evidence bundle | Add a cross-stack assessment manifest and version/method export |
-| Authentication | None for public/local data unless the source requires it | API key / remote MCP | Never place credentials in skill content or outputs |
+## Open computation and workflows
 
-## Important non-equivalences
+| Capability | Available surface | Limits and example use |
+|---|---|---|
+| Probability and fitting | Framework empirical, tabulated, fitted, hurdle and point-mass distributions; explicit fitting and diagnostics | A hurdle's dry-event atom is a modelling assumption. Inspect fit policy and source support; do not assume every source row has a parametric fit. |
+| Canonical hazard storage | SDK Arrow/Parquet contract, metadata, validation and streaming writers | Schema 1.2 adds tabulated probability/value lists and explicit `no_data` reason codes alongside fitted, hurdle and point-mass rows. Use SDK readers/evaluators instead of extracting only scalar fit parameters. |
+| Source acquisition | Lazy EFAS/GloFAS flood and EDO SMI drought plans with bounded areas, versioned caches and curated policies | Read resolved source, units, tail and support; summarize curve kinds and retain any available treatment diagnostics. Historical observations do not supply future climate projections. |
+| Agricultural evidence | `AgriculturalLayer.usda_cdl()` and `.ftw_fields()` with bounded scans and the common DuckDB/Arrow processing surface | Crop samples and predicted fields do not establish yield, ownership or financial materiality. See the [agricultural playbook](../agricultural-climate-risk.md). |
+| Other data | GeoTIFF/COG, Zarr, NetCDF, Arrow/Parquet, JSON/SQL through DuckDB; explicit canonical writers | Format access is available; an arbitrary dataset still needs a scientifically justified canonicalization policy. OS-Climate fixtures run locally; the live feed is not validated here. |
+| Spatial processing | H3 indexing, source-geometry refinement, admin overlays, coverage/lookup writers and PMTiles | Point matching can refine H3 candidates against source WKB. H3-only assets retain cell precision; regional max/min summaries are not exact asset assessments. PMTiles needs external tiling tools. |
+| Portfolio evaluation | `HazardDataset.local(...).for_assets(...).select(...).return_periods(...)` | One row per asset/hazard/scenario; ambiguous and unmatched joins raise. A matched `no_data` curve instead yields null values. Preserve both coverage and value availability. |
+| Event-aligned impact | `.impact(...)`, framework transforms and registry-backed impacts with `ImpactContextColumns` | Evaluates the impact at each hazard return period. This is not necessarily a quantile of the transformed loss distribution. Registry availability does not establish applicability to an insured exposure. |
+| Risk aggregation | Framework microscores, binary outcomes, spanning sets, VaR/CVaR and attribution | Basic branch construction assumes independent outcomes and grows as `2**n`; set branch limits. The example threshold model is not a full joint continuous-loss model. |
+| Multi-hazard/scenario work | Scenario filters and multi-scenario canonical evaluation; repository wrapper loops over separate hazards | There is no automatic cross-hazard score, dependence calibration or scenario-equivalence policy. Keep incompatible results separate. |
+| Evidence | Canonical source/evaluation metadata; agricultural manifest and preserved result files | A complete assessment-wide report, hashes, coverage exceptions and semantic comparison remain the skill's responsibility. |
 
-- JRC flood depth at a return period is not the same object as VELO DCR, expected impact, VaR, or CVaR.
-- Historical open observations are not interchangeable with a future climate pathway/horizon.
-- A user-supplied coordinate or Overture candidate is not automatically equivalent to VELO's resolved physical asset or ownership record.
-- A custom depth-damage ratio is not the same as VELO's proprietary impact model.
+The logical hazard key includes hazard, horizon, pathway, H3 cell and source ID;
+a cell can intersect more than one source pixel. Ordered canonical writes sort
+and validate keys using DuckDB, which may spill. `write_hazard_stream(...,
+ordered=False)` offers validated direct streaming without global physical sort.
+Neither option removes the need to budget memory, temporary disk and output size.
+
+## VELO/CDT access
+
+Prefer OAuth-connected CDT Express MCP and discover its current tool schemas.
+The optional fallback scripts target `velo-sdk==0.0.20`; MCP and that pinned SDK
+have different surfaces. API-double tests validate the scripts, not a live service.
+
+| Problem | Enterprise route | Interpretation limit |
+|---|---|---|
+| Property assessment | Resolve asset identity; request asset climate scores and available location metrics | Direct asset scoring exists in MCP; the pinned SDK helper routes through the owner's asset scores. Location metrics are not automatically asset scores. |
+| Company/index diligence | Resolve entity/index, obtain totals and bounded constituent/asset scores | Rankings and country/type concentrations are not factor attribution. Use explicit impact/factor responses when available. |
+| Insurability triage | Retrieve in-scope asset metrics under one scenario; use documented platform classifications | The pinned SDK describes `cvar_95 >= 0.35` as “uninsurable” and `>= 0.75` as “stranded.” These are platform labels, not universal underwriting rules; verify current metric definitions. |
+| Paired open/enterprise assessment | Map asset identity, source, hazard, scenario, unit and method | Flood depth, damage ratio, DCR and VaR/CVaR are not interchangeable. Use the [crosswalk](../../.agents/skills/compare-crc-velo-assessments/references/crosswalk.md). |
+
+Enterprise hazard breadth, proprietary ownership data and future scenarios depend
+on the connected service and entitlements. Confirm availability from returned
+evidence rather than promising fixed coverage. No complete CRC/VELO implementation
+parity is claimed.

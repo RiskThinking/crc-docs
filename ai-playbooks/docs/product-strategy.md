@@ -2,20 +2,18 @@
 
 ## Positioning
 
-Lead with an auditable open baseline, then demonstrate the decision lift from VELO/CDT on the same business question. The message is not “open is a teaser.” It is:
-
-1. CRC is the transparent computation and workflow foundation.
-2. The community can bring open or owned hazard data and inspect every modelling choice.
-3. VELO/CDT industrializes that foundation with broader and finer hazard coverage, proprietary physical-asset and ownership data, multi-factor scenarios, and enterprise-ready scores.
-4. A paired assessment shows which decisions can be made with the baseline and which need the enterprise lift.
-
-Avoid claiming that every current VELO/CDT component already runs on CRC. Use the accurate formulation: “CRC is the target open foundation and an increasing share of the VELO/CDT pipeline is being materialized on that stack.”
+CRC supplies an inspectable open computation and data workflow; VELO/CDT supplies
+additional enterprise evidence. Pair them only when the business question needs
+both. See the [problem map](../../README.md#choose-a-problem) for entry points and
+[capability matrix](capability-matrix.md) for the verified package boundary.
+Do not claim that every VELO/CDT component runs on CRC or that unlike metrics are
+equivalent.
 
 ## Demonstration pattern
 
 Every demo follows one narrative:
 
-1. Frame the decision: collateral review, underwriting triage, or investment diligence.
+1. Frame the problem: collateral review, underwriting triage, or investment diligence.
 2. Run the CRC baseline on user-supplied assets or clearly labelled Overture candidate locations with JRC or another canonical hazard dataset.
 3. Show the baseline's provenance, assumptions, coverage, unresolved assets, and extrapolation.
 4. Run the VELO/CDT twin on the aligned asset/company/index and scenario.
@@ -42,7 +40,7 @@ Treat this as an output layer across the three domains rather than a standalone 
 
 ## Future open CDT hazard dataset
 
-Design now for a source adapter that produces the existing CRC canonical hazard Parquet contract. Do not fork the downstream workflow. When the dataset is released, the same portfolio, impact, and comparison skills should work by changing only the dataset acquisition step.
+Design now for a source adapter that produces the existing CRC canonical hazard Parquet contract. Do not fork the downstream workflow. For any future release, validate its canonical output before reusing the portfolio, impact and comparison workflows. This is an integration proposal, not a claim that a release is available.
 
 The release-ready integration contract should include:
 

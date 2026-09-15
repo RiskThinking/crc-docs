@@ -1,6 +1,6 @@
 # Mortgage flood playbook
 
-Install `crc-sdk[geometry,raster]==0.3.0`. Point-to-H3 conversion needs the geometry extra; JRC GeoTIFF acquisition needs the raster extra.
+Use the repository environment: `uv sync --locked`. See [setup](../../../../ai-playbooks/docs/setup.md) for optional dependencies and the tested package baseline.
 
 ## Native crc-docs examples
 

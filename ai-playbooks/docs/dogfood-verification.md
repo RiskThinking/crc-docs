@@ -1,19 +1,47 @@
-# AI skill dogfood verification
+# Verification and lineage audit
 
-Verified locally on 2026-08-18 with `crc-sdk==0.3.0`, `crc-framework==0.2.0`, and `velo-sdk==0.0.20`.
+Verified on **2026-09-15** using the published **crc-sdk 0.7.1** and
+**crc-framework 0.2.5** wheels, with **velo-sdk 0.0.20** for SDK fallback tests.
+The environment was resolved from PyPI, not sibling editable checkouts.
+`pyproject.toml` requires SDK `>=0.7.1,<0.8`; `uv.lock` pins the tested versions.
 
-Run the repeatable offline suite from the repository root:
+## What passed
+
+| Check | Evidence | Scope |
+|---|---|---|
+| Seven-skill harness | All seven routes pass with varied targets/scenarios | Real CRC fixture computations; VELO API doubles; comparison inventory only |
+| Pipeline regressions | Six tests pass | FTW publication/manifest, null agricultural hazard values, flood/drought null summaries |
+| Fixture pipelines | Asset evaluation, impact, portfolio risk and multi-scenario pipelines pass | Real framework/SDK computations against checked-in Cologne data |
+| All nine notebooks | Full execution with 22 figures, each containing interactive Plotly data and PNG fallback; static HTML exports and visual checks pass | Five fixture notebooks plus live JRC flood, EDO drought, regional/admin and USDA agricultural notebooks; saved outputs are checked in |
+| Live open bootstrap | EFAS 3.1.1; Overture 2026-08-19.0; 280 canonical rows, 21 H3 cells, 10 candidates | Mortgage, loss and portfolio each produce 10 rows; comparison JSON is synthetic and inventory-only |
+| Live agricultural pipeline | USDA CDL 2025 corn/soy and GloFAS 2.1.2; 21 agricultural units, 17 matched and 4 outside coverage; map, summary and manifest written | Real bounded acquisition/evaluation; PMTiles skipped |
+| Static lineage checks | Local Markdown links, Python/notebook syntax, SDK/framework notebook imports and CLI help | Checks file/API references; does not execute every remote notebook |
+
+The live bootstrap used bounds `6.95,50.93,6.97,50.95` and produced schema-1.2
+canonical data. Package versions must be recorded independently of embedded
+`creation_version`: this run's metadata reported `0.2.0` despite the installed
+SDK being 0.7.1. Preserve the source metadata as returned and record the runtime
+package versions separately; do not silently rewrite provenance.
+
+## Reproduce
+
+Run from the repository root:
 
 ```shell
-uv run --extra velo python ai-playbooks/examples/dogfood/verify_skills.py
+uv sync --locked --extra velo
+uv run --extra velo python ai-playbooks/examples/dogfood/verify_skills.py \
+  --report pipeline_output/verification/skills.json
+uv run --with pytest python -m pytest -q
+./ai-playbooks/examples/run-open-demo.sh \
+  efas 6.95 50.93 6.97 50.95 pipeline_output/verification/live-open
 ```
 
-The harness creates an isolated temporary directory and removes its generated assessments when it exits. CRC tests execute the real package workflows against checked-in or synthetic canonical hazard data. VELO tests execute the real bundled scripts against deterministic API doubles; they verify routing, target selection, scenario propagation, result shaping, and missing-equivalence guardrails without requiring credentials or calling a live service.
-
-The deterministic harness intentionally retains small offline regression data;
-it is not the user-facing open bootstrap. The public playbooks use live Overture
-candidate discovery and JRC acquisition through
-`ai-playbooks/examples/run-open-demo.sh`.
+Use `python -m pytest` so the repository root is on the import path. The harness
+uses an isolated temporary directory; live outputs remain in the gitignored
+`pipeline_output/verification/` directory. Executed offline notebooks were saved
+there too. The subsequent full notebook refresh saved successful executions
+directly into all nine checked-in notebooks, with package versions and execution
+time in each notebook's `crc_preview` metadata.
 
 ## Target-flexibility results
 
@@ -27,32 +55,35 @@ candidate discovery and JRC acquisition through
 | `velo-assess-company-climate-risk` | Single company | Market index | Pass with API double after adding explicit `--company-id` / `--index-id` routing |
 | `compare-crc-velo-assessments` | Flood/property assessment pair | Drought/market-index assessment pair | Pass: both CRC and VELO artifact shapes changed while non-equivalence remained explicit |
 
-## Findings and corrections
+## Corrections from this audit
 
-Dogfooding found one material flexibility gap: `velo-assess-company-climate-risk` described company and market-index analysis, but its script accepted only `--company-id`. The script now supports mutually exclusive `--company-id` and `--index-id` targets and dispatches to the corresponding VELO SDK methods.
+- Replaced repeated route tables with the README's problem-to-skill-to-code map;
+  notebooks link back to their skill and setup instructions.
+- Removed old SDK 0.3.0 installation instructions and upgraded the locked packages.
+- Verified the agricultural skill's playbook link and documented its GloFAS default,
+  one-hazard-per-run interface and H3-only evaluation precision.
+- Updated canonical schema, impact-registry and direct MCP asset-scoring claims.
+- Fixed flood/drought CLI summaries that assumed all curve values were numeric;
+  agricultural map summaries now label matched null values separately from
+  locations outside coverage.
+- Distinguished helpers' data outputs from the full report an assistant assembles.
 
-Review found that `crc-model-flood-insurance-loss` did not select pathway and
-horizon before return-period evaluation. Its CLI now requires both values, and a
-regression case constructs a two-scenario flood file and verifies that each run
-contains only its selected scenario.
+## Validation limits
 
-## What this verifies
+Live VELO permissions, response schemas, pagination and available data were not
+revalidated: enterprise tests use API doubles. The synthetic comparison fixture
+does not establish target or metric equivalence. FTW remote acquisition remains
+unverified; its publication path uses local regression inputs. The notebook
+refresh executed the live EDO, regional/admin and USDA examples, including PMTiles
+exports. EDO initially timed out during acquisition; completed annual-minimum
+files were validated and the remaining years fetched before a successful full
+1995–2025 run. Remote availability and runtime still depend on source services.
 
-- Skill instructions and scripts do not hard-code one company, asset, geography, pathway, horizon, portfolio size, return-period set, or damage curve.
-- CRC scripts execute real local computations and preserve explicit hazard/scenario metadata.
-- VELO scripts select and propagate different targets correctly at the SDK boundary.
-- The comparison skill tolerates different enterprise artifact shapes without claiming metric equivalence.
+Notebook previews were checked locally through their embedded PNGs and static
+HTML exports; the refreshed files have not yet been published to GitHub. The
+[setup guide](setup.md#python-environment) includes the command to refresh them.
 
-## Live open-bootstrap verification
-
-The networked Cologne bootstrap was also verified on 2026-08-18 for bounds
-`6.95,50.93,6.97,50.95`. It resolved JRC EFAS release `3.1.1`, materialized 280
-canonical curve rows across 21 covered H3 cells, resolved Overture Places release
-`2026-07-22.0`, selected five candidates inside JRC source geometry, and produced
-five-row mortgage, flood-loss, and portfolio evaluations. This verifies the
-acquisition seam; it does not turn those Overture candidates into a real business
-portfolio.
-
-## Remaining live-system validation
-
-The API-double tests do not prove live VELO permissions, latency, pagination behavior, data availability, or server response compatibility. Before release, run the three VELO skills against an authorized sandbox using at least two real targets and record redacted response-schema fixtures. Do not use production mutation endpoints for this check.
+The [problem map](../../README.md#choose-a-problem) records whether a notebook is
+a workflow twin or a reference building block. [Setup](setup.md) explains output
+locations and prerequisites; [capabilities](capability-matrix.md) records semantic
+limits.

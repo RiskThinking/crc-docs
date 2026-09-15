@@ -1,6 +1,7 @@
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
 import pyarrow as pa
 import pyarrow.parquet as pq
 from crc_sdk.connectors.duckdb import DuckDBConnection
@@ -11,7 +12,10 @@ from pipelines.agricultural_climate_pipeline import (
 )
 
 
-def test_ftw_publication_uses_field_schema_and_writes_manifest(tmp_path: Path) -> None:
+@pytest.mark.parametrize("hazard_value,coverage", [(2.0, "modeled_hazard"), (None, "missing_hazard_value")])
+def test_ftw_publication_uses_field_schema_and_writes_manifest(
+    tmp_path: Path, hazard_value: float | None, coverage: str
+) -> None:
     agricultural_path = tmp_path / "ftw-agricultural-units.parquet"
     evaluation_path = tmp_path / "ftw-hazard-evaluation.parquet"
     connection = DuckDBConnection.for_analytics(
@@ -42,7 +46,7 @@ def test_ftw_publication_uses_field_schema_and_writes_manifest(tmp_path: Path) -
             {
                 "asset_id": ["field-1"],
                 "spatial_match": ["exact"],
-                "value_rp10": [2.0],
+                "value_rp10": pa.array([hazard_value], type=pa.float64()),
             }
         ),
         evaluation_path,
@@ -88,11 +92,11 @@ def test_ftw_publication_uses_field_schema_and_writes_manifest(tmp_path: Path) -
     by_coverage = {
         row["hazard_coverage"]: row for row in summary.to_pylist()
     }
-    assert float(by_coverage["modeled_hazard"]["observed_field_area_m2"]) == 100.0
+    assert float(by_coverage[coverage]["observed_field_area_m2"]) == 100.0
     assert (
         float(by_coverage["outside_modeled_hazard"]["observed_field_area_m2"])
         == 300.0
     )
-    assert by_coverage["modeled_hazard"]["area_weighted_value_rp10"] == 2.0
+    assert by_coverage[coverage]["area_weighted_value_rp10"] == hazard_value
     assert by_coverage["outside_modeled_hazard"]["area_weighted_value_rp10"] is None
     assert manifest_path.is_file()
