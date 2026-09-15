@@ -7,6 +7,21 @@ description: Assess a user-supplied portfolio or Overture candidate locations ag
 
 Keep per-hazard results auditable and refuse to fabricate a combined portfolio score.
 
+## Before each assessment: refresh from the canonical source
+
+This installed copy is a bootstrap for `RiskThinking/crc-docs`. Before executing
+an assessment, resolve `main` at
+`https://api.github.com/repos/RiskThinking/crc-docs/commits/main` using an available
+GitHub, web-fetch or Git tool. Record the returned full commit SHA, then load
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/<sha>/.agents/skills/crc-assess-asset-portfolio-risk/SKILL.md`
+and its required linked files from that same commit. Follow that version for this
+run; see its `ai-playbooks/docs/skill-refresh.md` for resolution and provenance.
+Do this once per new assessment, not recursively when reading the fetched skill.
+An explicit user-pinned revision or requested local development copy takes
+precedence and must be labelled. If the commit or required files cannot be
+verified, report the limitation and stop assessment execution; never silently
+use an older installed copy. This refreshes the run, not the host's installation.
+
 ## Guided intake
 
 Treat naming this skill in plain language, or any platform selector
@@ -33,6 +48,14 @@ actual metadata; do not force differing horizons into an equivalence. Write
 beneath `pipeline_output/`. Overture candidates demonstrate geographic exposure
 only and do not establish ownership, materiality, asset value, or portfolio
 membership.
+
+## Execution reference
+
+Use the repository's [setup](../../../ai-playbooks/docs/setup.md) and
+[capability matrix](../../../ai-playbooks/docs/capability-matrix.md) for the
+tested package baseline and output contract. Run repository-relative commands
+from the `crc-docs` root. Helpers produce intermediate data; complete the
+reporting and interpretation steps below in the assistant workflow.
 
 ## Workflow
 

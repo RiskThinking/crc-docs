@@ -39,8 +39,12 @@ uv run python pipelines/agricultural_climate_pipeline.py \
   --crop-codes 1 5 --return-periods 10 100
 ```
 
-For Europe, materialize EDO with `pipelines/jrc_drought_pipeline.py`, then run
-the agricultural pipeline with `--source ftw --country-code <ISO2>`.
+For Europe, materialize EFAS flood or EDO drought first, then pass that
+canonical file with `--hazard <path>` alongside `--source ftw --country-code
+<ISO2>`. Omitting `--hazard` always bootstraps GloFAS, including in Europe.
+Use a separate output directory for each hazard/scenario; the CLI accepts one
+hazard file per run. Select a single scenario before supplying a multi-scenario
+file to avoid duplicating agricultural units in summaries.
 
 ## Interpret the outputs
 
@@ -50,7 +54,8 @@ values as separate artifacts. Report:
 - agricultural source, version, year, resolution, license, and filters;
 - hazard source, release, pathway, horizon, unit, probability convention, and
   source support from embedded metadata;
-- matched and missing agricultural units, with exact/H3 match labels;
+- matched and missing agricultural units, with H3 match labels (the pipeline
+  evaluates cell-indexed units, not exact field-polygon intersections);
 - USDA sampled crop composition or FTW confidence/field area;
 - return-period hazard values with interpolation/extrapolation warnings.
 
@@ -61,6 +66,10 @@ country, year, and coverage status. Do not create a combined "farm risk score"
 without an authorized impact model, exposure values, and a documented
 aggregation policy. Observed crop cover is not yield, production, revenue,
 ownership, or vulnerability.
+
+The map distinguishes `modeled_hazard`, `outside_modeled_hazard`, and
+`missing_hazard_value` (a matched row with one or more null return-period values).
+Weighted summaries exclude null hazard values from both numerator and denominator.
 
 ## Reproducible bundle
 

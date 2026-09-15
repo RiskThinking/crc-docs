@@ -1,6 +1,6 @@
 # Asset portfolio playbook
 
-Install `crc-sdk[geometry]==0.3.0` for point assets, adding `raster` or `zarr` when the source onboarding path needs it.
+Use the repository environment: `uv sync --locked`. See [setup](../../../../ai-playbooks/docs/setup.md) for optional dependencies and the tested package baseline.
 
 ## Native crc-docs learning path
 

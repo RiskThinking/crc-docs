@@ -264,6 +264,7 @@ def build_map_artifacts(
         if name.startswith("value_")
     ]
     value_projection = ", ".join(f"e.{name}" for name in value_columns)
+    missing_values = " OR ".join(f"e.{name} IS NULL" for name in value_columns) or "true"
     if value_projection:
         value_projection = ", " + value_projection
     weight_column = "pixel_count" if args.source == "usda" else "area_m2"
@@ -340,6 +341,7 @@ def build_map_artifacts(
                 SELECT {agricultural_projection},
                        CASE WHEN e.asset_id IS NULL
                             THEN 'outside_modeled_hazard'
+                            WHEN {missing_values} THEN 'missing_hazard_value'
                             ELSE 'modeled_hazard' END AS hazard_coverage,
                        e.spatial_match{value_projection},
                        {geometry_projection}

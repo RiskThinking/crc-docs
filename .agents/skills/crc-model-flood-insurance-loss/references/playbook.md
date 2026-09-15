@@ -1,6 +1,6 @@
 # Flood loss playbook
 
-Install `crc-sdk[geometry]==0.3.0` for point-asset evaluation.
+Use the repository environment: `uv sync --locked`. See [setup](../../../../ai-playbooks/docs/setup.md) for optional dependencies and the tested package baseline.
 
 ## Native crc-docs examples
 
