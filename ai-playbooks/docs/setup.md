@@ -59,6 +59,32 @@ OpenAI's API supports explicitly uploaded immutable skill versions
 that API is not evidence that a ChatGPT upload automatically follows GitHub.
 We therefore do not promise unconditional auto-update on either chat platform.
 
+## Run notebooks in Colab
+
+The [notebook links in the problem table](../../README.md#choose-a-problem) open
+Google Colab. Connect a standard Python runtime (no GPU required), then choose
+**Runtime → Run all**. The first code cell installs the notebook's SDK extras,
+plotting packages and, where needed, the `tippecanoe` binaries. It checks PNG
+rendering and downloads Chrome if no compatible browser is available.
+If an already imported package changes, follow the cell's restart instruction
+and run all cells again.
+
+Each notebook works without a repository checkout. Its setup downloads only the
+required fixtures or pipeline script from a fixed `crc-docs` commit and checks
+their SHA-256 hashes. SDK/framework versions are pinned in that same cell.
+A local checkout uses its own files, so edits remain testable. Live source data
+still comes from the providers named in the notebook and is cached separately.
+
+Colab runtimes are temporary: download results from the Files panel before the
+runtime is deleted. The setup cell prints the working directory; caches live
+under its `data/` folder, PMTiles under `artifacts/`, and other exported results
+under the sibling `pipeline_output/` folder. Standalone files are inside
+`.crc-docs/`; enable **Show hidden files** in the Files panel if needed.
+Saved figures remain visible in
+[GitHub previews](../../notebooks/); interactive charts require running the notebook.
+Colab does not share installed libraries or runtime files with a notebook, which
+is why setup runs inside each one ([Colab FAQ](https://research.google.com/colaboratory/faq.html)).
+
 ## Python environment
 
 ```shell
@@ -67,14 +93,17 @@ uv run jupyter lab notebooks/
 uv run python pipelines/asset_portfolio_pipeline.py
 ```
 
-Use Python 3.12+; notebook relative paths assume `notebooks/` as the working
-directory. The lockfile records the tested package versions. `crc-sdk` supplies
-data access, canonicalization and workflows; `crc-framework` supplies numerical
+Use Python 3.12+. Notebook setup locates the checkout and selects its
+`notebooks/` working directory automatically. The lockfile records the tested
+local environment; standalone notebooks declare their own dependencies.
+`crc-sdk` supplies data access, canonicalization and workflows; `crc-framework` supplies numerical
 distributions, fitting, impacts and risk metrics. The SDK re-exports core APIs.
 
-PMTiles export requires `tippecanoe` on PATH (and `tile-join` for merging).
+Standalone pipeline PMTiles export requires `tippecanoe` on PATH (and `tile-join`
+for merging); the notebooks that export tiles install these binaries themselves.
 Use a pipeline's `--skip-pmtiles` option when available to omit that export.
-Plotly PNG output requires Kaleido and a compatible Chrome installation.
+Plotly PNG output requires Kaleido and compatible Chrome; notebook setup checks
+and provisions them.
 Each notebook includes a short viewing guide and saves Plotly interactive data
 alongside a PNG in the same output. Compatible notebook viewers display the
 interactive figure; GitHub uses the static image without executing JavaScript.
@@ -87,7 +116,7 @@ uv run jupyter nbconvert --to notebook --execute --inplace \
   --ExecutePreprocessor.timeout=3600 notebooks/*.ipynb
 ```
 
-Run this with network access and the rendering/PMTiles prerequisites above.
+Run this with network access; the notebook setup cells install their prerequisites.
 The remote hazard notebooks rebuild canonical curves with the installed SDK
 while reusing validated source caches. Save successful outputs before committing;
 every Plotly figure should contain both `application/vnd.plotly.v1+json` and
