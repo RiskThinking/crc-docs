@@ -64,8 +64,8 @@ We therefore do not promise unconditional auto-update on either chat platform.
 The [notebook links in the problem table](../../README.md#choose-a-problem) open
 Google Colab. Connect a standard Python runtime (no GPU required), then choose
 **Runtime → Run all**. The first code cell installs the notebook's SDK extras,
-plotting packages and, where needed, the `tippecanoe` binaries. It checks PNG
-rendering and downloads Chrome if no compatible browser is available.
+plotting packages and, where needed, the `tippecanoe` binaries. Colab uses its
+native interactive Plotly renderer; it does not need Kaleido or Chrome.
 If an already imported package changes, follow the cell's restart instruction
 and run all cells again.
 
@@ -80,8 +80,8 @@ runtime is deleted. The setup cell prints the working directory; caches live
 under its `data/` folder, PMTiles under `artifacts/`, and other exported results
 under the sibling `pipeline_output/` folder. Standalone files are inside
 `.crc-docs/`; enable **Show hidden files** in the Files panel if needed.
-Saved figures remain visible in
-[GitHub previews](../../notebooks/); interactive charts require running the notebook.
+Saved figures remain visible in [GitHub previews](../../notebooks/); interactive
+charts require running the notebook.
 Colab does not share installed libraries or runtime files with a notebook, which
 is why setup runs inside each one ([Colab FAQ](https://research.google.com/colaboratory/faq.html)).
 
@@ -102,17 +102,16 @@ distributions, fitting, impacts and risk metrics. The SDK re-exports core APIs.
 Standalone pipeline PMTiles export requires `tippecanoe` on PATH (and `tile-join`
 for merging); the notebooks that export tiles install these binaries themselves.
 Use a pipeline's `--skip-pmtiles` option when available to omit that export.
-Plotly PNG output requires Kaleido and compatible Chrome; notebook setup checks
-and provisions them.
-Each notebook includes a short viewing guide and saves Plotly interactive data
-alongside a PNG in the same output. Compatible notebook viewers display the
-interactive figure; GitHub uses the static image without executing JavaScript.
-Saved outputs are a snapshot of the recorded execution, not live data.
+Normal notebook runs use interactive Plotly only. Saved GitHub previews are an
+authoring concern: maintainers can set `CRC_NOTEBOOK_STATIC_PREVIEW=1` when
+refreshing outputs from the locked local environment, where Kaleido and Chrome
+are available. Saved outputs are a snapshot of the recorded execution, not live
+data.
 
 To refresh all saved notebook outputs from the repository root:
 
 ```shell
-uv run jupyter nbconvert --to notebook --execute --inplace \
+CRC_NOTEBOOK_STATIC_PREVIEW=1 uv run jupyter nbconvert --to notebook --execute --inplace \
   --ExecutePreprocessor.timeout=3600 notebooks/*.ipynb
 ```
 

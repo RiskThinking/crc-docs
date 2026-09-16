@@ -39,13 +39,11 @@ calls or their linked SDK scripts; there are no enterprise notebook twins here.
 | **Understand a fitted flood curve.** "How does a dry-event probability combine with positive flood depth?" | [Mortgage flood screen](.agents/skills/crc-screen-mortgage-flood/SKILL.md), methods reference<br>**Example:** `Use the crc-screen-mortgage-flood skill to explain the hurdle-distribution primer.` | - | [Hurdle-distribution primer](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/hurdle_fit_primer.ipynb) | - |
 | **Reconcile open and enterprise results.** "What can each assessment tell us about the same real target?" | [Compare CRC and VELO](.agents/skills/compare-crc-velo-assessments/SKILL.md)<br>**Example:** `Use the compare-crc-velo-assessments skill with the CRC and VELO results in this conversation.` | Same comparison skill; run the relevant enterprise skill first | - | [Artifact inventory](.agents/skills/compare-crc-velo-assessments/scripts/inventory_assessments.py), followed by the skill's semantic comparison |
 
-## Run an example
+## Run a notebook
 
-Notebook links above open **Google Colab**: connect a Python runtime and choose
-**Runtime → Run all**. Each notebook installs its dependencies and fetches the
-small repository files it needs; no clone is required. Charts are interactive
-when running, with saved PNG fallbacks for [GitHub previews](notebooks/).
-The first run needs internet access and may take several minutes.
+Open a notebook from the table in Colab and choose **Runtime → Run all**. No
+clone, API key or GPU is required. The first run installs dependencies and may
+take several minutes; saved outputs are already visible on GitHub.
 
 Prefer a local environment? Use Python 3.12+:
 
