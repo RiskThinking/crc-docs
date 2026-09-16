@@ -19,6 +19,8 @@ def test_all_notebooks_use_browser_free_runtime_setup() -> None:
         assert "pio.to_image" not in setup, path
         assert "ChromeNotFoundError" not in setup, path
         assert "kaleido" not in setup.lower(), path
+        assert "duckdb>=1.4.5,<2" in setup, path
+        assert '"plotly", "duckdb", "crc_sdk"' in setup, path
         assert "CRC_NOTEBOOK_STATIC_PREVIEW" in imports, path
         assert '"colab" if IN_COLAB' in imports, path
         assert "### Viewing this notebook" not in all_source, path
