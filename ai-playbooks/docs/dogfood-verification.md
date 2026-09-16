@@ -13,6 +13,7 @@ The environment was resolved from PyPI, not sibling editable checkouts.
 | Pipeline regressions | Six tests pass | FTW publication/manifest, null agricultural hazard values, flood/drought null summaries |
 | Fixture pipelines | Asset evaluation, impact, portfolio risk and multi-scenario pipelines pass | Real framework/SDK computations against checked-in Cologne data |
 | All nine notebooks | Full execution with 22 figures, each containing interactive Plotly data and PNG fallback; static HTML exports and visual checks pass | Five fixture notebooks plus live JRC flood, EDO drought, regional/admin and USDA agricultural notebooks; saved outputs are checked in |
+| Standalone notebook setup | Six full runs outside the checkout (five fixture notebooks and agriculture), plus setup/import checks for the other three | Fresh Python environment initially containing only a notebook kernel; pinned resource downloads, repeatable setup, pip-installed PMTiles tools and Colab renderer MIME checks pass |
 | Live open bootstrap | EFAS 3.1.1; Overture 2026-08-19.0; 280 canonical rows, 21 H3 cells, 10 candidates | Mortgage, loss and portfolio each produce 10 rows; comparison JSON is synthetic and inventory-only |
 | Live agricultural pipeline | USDA CDL 2025 corn/soy and GloFAS 2.1.2; 21 agricultural units, 17 matched and 4 outside coverage; map, summary and manifest written | Real bounded acquisition/evaluation; PMTiles skipped |
 | Static lineage checks | Local Markdown links, Python/notebook syntax, SDK/framework notebook imports and CLI help | Checks file/API references; does not execute every remote notebook |
@@ -80,8 +81,10 @@ files were validated and the remaining years fetched before a successful full
 1995–2025 run. Remote availability and runtime still depend on source services.
 
 Notebook previews were checked locally through their embedded PNGs and static
-HTML exports; the refreshed files have not yet been published to GitHub. The
-[setup guide](setup.md#python-environment) includes the command to refresh them.
+HTML exports. Colab setup was tested in a clean local runtime outside the
+checkout, not in a hosted Google Colab session. Notebook links resolve the
+published `main` branch, so new setup cells become available there after these
+changes are pushed. The [setup guide](setup.md#python-environment) includes the command to refresh them.
 
 The [problem map](../../README.md#choose-a-problem) records whether a notebook is
 a workflow twin or a reference building block. [Setup](setup.md) explains output
