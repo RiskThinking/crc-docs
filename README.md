@@ -90,8 +90,8 @@ assemble the final report. Missing evidence must remain visible.
 
 ## Capabilities and verification
 
-The current reproducible baseline is **crc-sdk 0.7.1 / crc-framework 0.2.5**,
-verified against the published packages. See [verification results and limits](ai-playbooks/docs/dogfood-verification.md).
+The published-package assessments were verified with **crc-sdk 0.7.1 /
+crc-framework 0.2.5**. See [verification results and limits](ai-playbooks/docs/dogfood-verification.md).
 The SDK handles source access, canonical hazard data and spatial/portfolio
 workflows; the framework provides distributions, fitting, impacts and risk metrics.
 
