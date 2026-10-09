@@ -9,7 +9,7 @@ dependencies = [
     "kaleido>=0.2.1",
     "pandas>=3.0.5",
     "plotly>=6.9.0",
-    "crc-sdk[agriculture,zarr,raster,netcdf,geometry]>=0.8.0a2,<1",
+    "crc-sdk[agriculture,zarr,raster,netcdf,geometry]>=0.8.0a3,<1",
 ]
 
 [project.optional-dependencies]
