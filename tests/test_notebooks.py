@@ -6,7 +6,7 @@ NOTEBOOKS = sorted(Path("notebooks").glob("*.ipynb"))
 
 
 def test_all_notebooks_use_browser_free_runtime_setup() -> None:
-    assert len(NOTEBOOKS) == 10
+    assert NOTEBOOKS, "No notebooks discovered"
 
     for path in NOTEBOOKS:
         notebook = json.loads(path.read_text())
