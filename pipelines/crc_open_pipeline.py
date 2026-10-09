@@ -16,8 +16,8 @@ import json
 from pathlib import Path
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
-
 from crc_sdk.workflows import HazardDataset
 
 RELEASE = "ssp585-fixture-2026-10-08-v2"
@@ -38,7 +38,9 @@ def main() -> None:
     )
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    assets = pa.table(dict(asset_id=["Toronto"], longitude=[-79.38], latitude=[43.65]))
+    assets = pa.table(
+        {"asset_id": ["Toronto"], "longitude": [-79.38], "latitude": [43.65]}
+    )
     plan = (
         HazardDataset.crc_open(release=RELEASE, fixtures=args.fixtures)
         .for_area((-79.5, 43.5, -79.2, 43.8))
@@ -75,14 +77,20 @@ def main() -> None:
             .return_periods([10, 100])
             .write_parquet(args.output / "era5_historical.parquet")
         )
-        if historical.row_count == 0:
-            raise LookupError("ERA5 baseline does not cover Toronto")
+        historical_table = pq.read_table(historical.output)
+        if not any(
+            pc.any(pc.is_finite(historical_table[column])).as_py()
+            for column in historical.value_columns
+        ):
+            raise LookupError(
+                "ERA5 baseline has no usable Rx1day return values for Toronto"
+            )
         print("ERA5 historical comparison (different source, period and methodology):")
         print(
             json.dumps(
-                pq.read_table(historical.output)
-                .select(["asset_id", "horizon", "pathway", *historical.value_columns])
-                .to_pylist(),
+                historical_table.select(
+                    ["asset_id", "horizon", "pathway", *historical.value_columns]
+                ).to_pylist(),
                 indent=2,
             )
         )
