@@ -35,7 +35,11 @@ No-data rows are retained rather than converted to zero.
 
 The catalogue and embedded Parquet metadata carry release terms, source
 checksums and attribution to Riskthinking.AI bias-corrected climate distributions.
-The SDK's software licence does not determine the data licence.
+The SDK's software licence does not determine the data licence. The CRC Open
+dataset is licensed under
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
+(`CC-BY-NC-4.0`): attribution is required, and commercial use needs a separate
+licence. `_CATALOG.json` and the Parquet metadata record that licence.
 `_SUCCESS` contains the SHA256 of `_CATALOG.json`; partition digests cover exact
 file bytes. Completed release IDs are immutable.
 
