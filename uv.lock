@@ -626,7 +626,7 @@ velo = [
 
 [package.metadata]
 requires-dist = [
-    { name = "crc-sdk", extras = ["agriculture", "zarr", "raster", "netcdf", "geometry"], specifier = ">=0.8.0a2,<1" },
+    { name = "crc-sdk", extras = ["agriculture", "zarr", "raster", "netcdf", "geometry"], specifier = ">=0.8.0a3,<1" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "kaleido", specifier = ">=0.2.1" },
     { name = "pandas", specifier = ">=3.0.5" },
@@ -658,7 +658,7 @@ wheels = [
 
 [[package]]
 name = "crc-sdk"
-version = "0.8.0a2"
+version = "0.8.0a3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "crc-framework" },
@@ -670,9 +670,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "s3fs" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f1/0a/76239aa62c2afd0b8773aaf7ac124d408e72b9d0e9693695ae4b038d97f9/crc_sdk-0.8.0a2.tar.gz", hash = "sha256:9ac0fcba973e17a5c3bef5cc598d6b27783277b8b7e702359ada7590d4766ee0", size = 277150, upload-time = "2026-10-08T21:19:17.855Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/4a/aa665d437f71d6a70109e6b93ba9b0456029523ef5fb732c097d42993146/crc_sdk-0.8.0a3.tar.gz", hash = "sha256:f5221074f0dc19b4503eba5e634110dc618071ca8ea4c6ccebccd06e13ec0624", size = 290489, upload-time = "2026-10-14T14:56:59.852Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5b/9e/dae7de49dd6e5d088beeb3e2cbfc3b6fd9e307fee808594836bf0c677800/crc_sdk-0.8.0a2-py3-none-any.whl", hash = "sha256:f10e82f8b42655e57035e40b8fd80047794eb4d6c1bd9ec4033eaf02cfa16b3a", size = 215578, upload-time = "2026-10-08T21:19:16.172Z" },
+    { url = "https://files.pythonhosted.org/packages/95/c8/a711eca329f5cf5d24c9def3cc43b4161d1c5b4d1a4fa70b17a7dcec6684/crc_sdk-0.8.0a3-py3-none-any.whl", hash = "sha256:6cf0b4c6a17e50adc17496d514063af98cfc1a9c37d6767f77fccc3f5b3779bb", size = 225288, upload-time = "2026-10-14T14:56:57.877Z" },
 ]
 
 [package.optional-dependencies]
