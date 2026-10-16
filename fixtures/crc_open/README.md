@@ -1,17 +1,23 @@
 # CRC SSP585 fixtures
 
-Release `ssp585-fixture-2026-10-08-v2` contains **61 hazards**, **46,213 rows**
-in 540 Parquet files. Data and catalogue total about **4.12 MB**; the largest
-Parquet file is 8,003 bytes. These are geographic samples for SDK examples,
+Release `ssp585-fixture-2026-10-08-v2` contains **63 hazards**, **47,013 rows**
+in 546 Parquet files. Data and catalogue total about **6.79 MB**; the largest
+Parquet file is 14,255 bytes. These are geographic samples for SDK examples,
 with coverage recorded in `_CATALOG.json`.
 
 ## Coverage and interpretation
 
 The release contains literal `ssp585` rows for 59 climate-index hazards,
-inundation and cyclone. `cflood` and `rflood` are excluded because their source
-uses `Hot House`, `NDC` and `RT3` rather than SSP585. There are no historic or
-other-scenario rows. SSP5-8.5 is an emissions scenario, not a probability assigned
-to future emissions.
+inundation, cyclone, coastal flood (`cflood`) and river flood (`rflood`).
+There are no historic or other-scenario rows. SSP5-8.5 is an emissions scenario,
+not a probability assigned to future emissions.
+
+The 540 climate-index, inundation and cyclone files from the original cut are
+unchanged. On 15 Oct 2026, `cflood` (384 rows) and `rflood` (416 rows) were
+added in this same release directory from the canonical flood pathway broadcast.
+Those partitions use the inundation sample's r7 cells and, where one of those
+cells has no flood row, r7 children of the published r5 city cells. City and
+neighbour selection was not rerun.
 
 Climate indices use native r5 cells around Toronto, Phoenix, London, Dhaka,
 Singapore, Nairobi, São Paulo and Sydney: each city's centre cell and six
@@ -41,7 +47,10 @@ dataset is licensed under
 (`CC-BY-NC-4.0`): attribution is required, and commercial use needs a separate
 licence. `_CATALOG.json` and the Parquet metadata record that licence.
 `_SUCCESS` contains the SHA256 of `_CATALOG.json`; partition digests cover exact
-file bytes. Completed release IDs are immutable.
+file bytes. The release ID stays `ssp585-fixture-2026-10-08-v2`. Catalogue and
+`_SUCCESS` changed when coastal and river flood were added. An SDK cache that
+already stored the previous catalogue keeps it on `reuse`. `refresh` rejects
+the changed catalogue bytes, so use a new cache directory to read the flood rows.
 
 ## Run the example
 

@@ -1,10 +1,7 @@
 {
   "attribution": "Riskthinking.AI bias-corrected climate distributions",
   "catalog_version": 1,
-  "excluded_hazards": {
-    "cflood": "No SSP585 pathway in inspected canonical partitions; original labels are Hot House/NDC/RT3",
-    "rflood": "No SSP585 pathway in inspected canonical partitions; original labels are Hot House/NDC/RT3"
-  },
+  "excluded_hazards": {},
   "fixture": true,
   "hazards": {
     "at": {
@@ -1081,6 +1078,163 @@
       "tail": "upper",
       "unit": "(m/s) days",
       "value_semantics": "annual sum of positive wind-speed excess above threshold"
+    },
+    "cflood": {
+      "h3_resolution": 7,
+      "horizons": [
+        2025,
+        2030,
+        2035,
+        2040,
+        2045,
+        2050,
+        2055,
+        2060,
+        2065,
+        2070,
+        2075,
+        2080,
+        2085,
+        2090,
+        2095,
+        2100
+      ],
+      "notes": "SSP585 rows use the canonical flood pathway broadcast. Cells are the inundation fixture's r7 sample, with r7 children of published r5 city cells only where that sample cell has no flood row.",
+      "partitions": [
+        {
+          "cells": [
+            608431125504720895,
+            608431125538275327,
+            608431142030278655,
+            608431142097387519
+          ],
+          "curve_kinds": {
+            "fitted": 64
+          },
+          "h3_r0": "8019fffffffffff",
+          "horizons": [
+            2025,
+            2030,
+            2035,
+            2040,
+            2045,
+            2050,
+            2055,
+            2060,
+            2065,
+            2070,
+            2075,
+            2080,
+            2085,
+            2090,
+            2095,
+            2100
+          ],
+          "path": "cflood/h3_r0=8019fffffffffff/part-00000.parquet",
+          "rows": 64,
+          "sha256": "3f01fc8fdbf46a71b7cb8b1457e379076af0ebfedba7e313611260ce90d7caf0",
+          "size_bytes": 10197,
+          "source_generation": "1792099770082936",
+          "source_sha256": "6467deac9e6f530e1b85c9178ffea73af4f28d727a827d41d22a054a50ed3b95"
+        },
+        {
+          "cells": [
+            609058069699100671,
+            609058069782986751,
+            609058069883650047,
+            609058069917204479,
+            609058069933981695,
+            609058069984313343,
+            609058073843073023
+          ],
+          "curve_kinds": {
+            "fitted": 9,
+            "hurdle": 102,
+            "no_data": 1
+          },
+          "h3_r0": "803dfffffffffff",
+          "horizons": [
+            2025,
+            2030,
+            2035,
+            2040,
+            2045,
+            2050,
+            2055,
+            2060,
+            2065,
+            2070,
+            2075,
+            2080,
+            2085,
+            2090,
+            2095,
+            2100
+          ],
+          "path": "cflood/h3_r0=803dfffffffffff/part-00000.parquet",
+          "rows": 112,
+          "sha256": "20e8f057a05abe6cf57969ae65dd4806782fd5a38609c01bc0366989ad57f872",
+          "size_bytes": 13392,
+          "source_generation": "1792099934084830",
+          "source_sha256": "049ecc7e1434e0e77eac1dfea6e4742e118bfa2fe9c2e719ef9d1d296d32f721"
+        },
+        {
+          "cells": [
+            609765017524371455,
+            609765017641811967,
+            609765017658589183,
+            609765017708920831,
+            609765018044465151,
+            609765018145128447,
+            609765018178682879,
+            609765018195460095,
+            609765018229014527,
+            609765018245791743,
+            609765018262568959,
+            609765018312900607,
+            609765018363232255
+          ],
+          "curve_kinds": {
+            "fitted": 188,
+            "hurdle": 4,
+            "point_mass": 5,
+            "tabulated": 11
+          },
+          "h3_r0": "8065fffffffffff",
+          "horizons": [
+            2025,
+            2030,
+            2035,
+            2040,
+            2045,
+            2050,
+            2055,
+            2060,
+            2065,
+            2070,
+            2075,
+            2080,
+            2085,
+            2090,
+            2095,
+            2100
+          ],
+          "path": "cflood/h3_r0=8065fffffffffff/part-00000.parquet",
+          "rows": 208,
+          "sha256": "05f23cd18cbff9a113aae2186c775c2937d94647a9efe8e81e5d5537b2045ae0",
+          "size_bytes": 14255,
+          "source_generation": "1792100335300778",
+          "source_sha256": "d800cbe6f252c65f35f34ff0548b155542ca5f94387debe2af3533788349933d"
+        }
+      ],
+      "pathways": [
+        "ssp585"
+      ],
+      "pooling": "pooled",
+      "probability_semantics": null,
+      "tail": "upper",
+      "unit": "m",
+      "value_semantics": "coastal flood depth; depth capped at zero before fitting and on evaluation"
     },
     "cold_spell_days": {
       "h3_resolution": 5,
@@ -13710,6 +13864,161 @@
       "tail": "upper",
       "unit": "mm",
       "value_semantics": "annual total precipitation"
+    },
+    "rflood": {
+      "h3_resolution": 7,
+      "horizons": [
+        2025,
+        2030,
+        2035,
+        2040,
+        2045,
+        2050,
+        2055,
+        2060,
+        2065,
+        2070,
+        2075,
+        2080,
+        2085,
+        2090,
+        2095,
+        2100
+      ],
+      "notes": "SSP585 rows use the canonical flood pathway broadcast. Cells are the inundation fixture's r7 sample, with r7 children of published r5 city cells only where that sample cell has no flood row.",
+      "partitions": [
+        {
+          "cells": [
+            608431125504720895,
+            608431125538275327,
+            608431142030278655,
+            608431142097387519
+          ],
+          "curve_kinds": {
+            "hurdle": 64
+          },
+          "h3_r0": "8019fffffffffff",
+          "horizons": [
+            2025,
+            2030,
+            2035,
+            2040,
+            2045,
+            2050,
+            2055,
+            2060,
+            2065,
+            2070,
+            2075,
+            2080,
+            2085,
+            2090,
+            2095,
+            2100
+          ],
+          "path": "rflood/h3_r0=8019fffffffffff/part-00000.parquet",
+          "rows": 64,
+          "sha256": "10e58aae206facb561dcb1948b867f66f14dfce110cef48e01deefb8f6a5dae8",
+          "size_bytes": 11095,
+          "source_generation": "1792101417523375",
+          "source_sha256": "bf439829ed799e61fa8f53f0f7dab7066408d796c4e8a6e79f3dacdab681583d"
+        },
+        {
+          "cells": [
+            609058069699100671,
+            609058069782986751,
+            609058069883650047,
+            609058069917204479,
+            609058069933981695,
+            609058069984313343,
+            609058073843073023
+          ],
+          "curve_kinds": {
+            "hurdle": 112
+          },
+          "h3_r0": "803dfffffffffff",
+          "horizons": [
+            2025,
+            2030,
+            2035,
+            2040,
+            2045,
+            2050,
+            2055,
+            2060,
+            2065,
+            2070,
+            2075,
+            2080,
+            2085,
+            2090,
+            2095,
+            2100
+          ],
+          "path": "rflood/h3_r0=803dfffffffffff/part-00000.parquet",
+          "rows": 112,
+          "sha256": "01731e66b32e8ce7937c7262fab04aa2369d1d428c6f6754d3539b6a64fdf42f",
+          "size_bytes": 13387,
+          "source_generation": "1792102192219405",
+          "source_sha256": "5b9ae41e89ea7f0ccddf5c9f3b2d927c4e222d4ca9765c59d6f78cd93b6900fb"
+        },
+        {
+          "cells": [
+            609765017574703103,
+            609765017658589183,
+            609765017692143615,
+            609765018363232255,
+            609765385851371519,
+            609765385952034815,
+            609765385968812031,
+            609765385985589247,
+            609765386035920895,
+            609765386220470271,
+            609765386287579135,
+            609765386606346239,
+            609765386623123455,
+            609765386656677887,
+            609765386673455103
+          ],
+          "curve_kinds": {
+            "hurdle": 227,
+            "point_mass": 13
+          },
+          "h3_r0": "8065fffffffffff",
+          "horizons": [
+            2025,
+            2030,
+            2035,
+            2040,
+            2045,
+            2050,
+            2055,
+            2060,
+            2065,
+            2070,
+            2075,
+            2080,
+            2085,
+            2090,
+            2095,
+            2100
+          ],
+          "path": "rflood/h3_r0=8065fffffffffff/part-00000.parquet",
+          "rows": 240,
+          "sha256": "43f02dc5524cc4d13594a9f5c6266e0a5a286953ec8917088d0c7ac4d50a1d53",
+          "size_bytes": 12020,
+          "source_generation": "1792102901760785",
+          "source_sha256": "9fe1c0e08be85079e10416da0b96ef752025053ef0390f95fc0d48cd1d22b38f"
+        }
+      ],
+      "pathways": [
+        "ssp585"
+      ],
+      "pooling": "pooled",
+      "probability_semantics": null,
+      "tail": "upper",
+      "unit": "m",
+      "value_semantics": "river flood depth; depth capped at zero before fitting and on evaluation"
     },
     "rx1day": {
       "h3_resolution": 5,
