@@ -1099,7 +1099,7 @@
         2095,
         2100
       ],
-      "notes": "SSP585 rows use the canonical flood pathway broadcast. Cells are the inundation fixture's r7 sample, with r7 children of published r5 city cells only where that sample cell has no flood row.",
+      "notes": "Scenario-compatible SSP585-labelled curves; not independently fitted SSP585 projections. Geographic coverage is sampled at native r7 near the published cities.",
       "partitions": [
         {
           "cells": [
@@ -13885,7 +13885,7 @@
         2095,
         2100
       ],
-      "notes": "SSP585 rows use the canonical flood pathway broadcast. Cells are the inundation fixture's r7 sample, with r7 children of published r5 city cells only where that sample cell has no flood row.",
+      "notes": "Scenario-compatible SSP585-labelled curves; not independently fitted SSP585 projections. Geographic coverage is sampled at native r7 near the published cities.",
       "partitions": [
         {
           "cells": [

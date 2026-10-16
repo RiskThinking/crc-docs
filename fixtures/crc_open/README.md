@@ -12,12 +12,9 @@ inundation, cyclone, coastal flood (`cflood`) and river flood (`rflood`).
 There are no historic or other-scenario rows. SSP5-8.5 is an emissions scenario,
 not a probability assigned to future emissions.
 
-The 540 climate-index, inundation and cyclone files from the original cut are
-unchanged. On 15 Oct 2026, `cflood` (384 rows) and `rflood` (416 rows) were
-added in this same release directory from the canonical flood pathway broadcast.
-Those partitions use the inundation sample's r7 cells and, where one of those
-cells has no flood row, r7 children of the published r5 city cells. City and
-neighbour selection was not rerun.
+Coastal and river flood use scenario-compatible SSP585-labelled curves rather
+than independently fitted SSP585 projections. Their geographic samples use
+native r7 cells near the published cities.
 
 Climate indices use native r5 cells around Toronto, Phoenix, London, Dhaka,
 Singapore, Nairobi, São Paulo and Sydney: each city's centre cell and six
@@ -47,10 +44,7 @@ dataset is licensed under
 (`CC-BY-NC-4.0`): attribution is required, and commercial use needs a separate
 licence. `_CATALOG.json` and the Parquet metadata record that licence.
 `_SUCCESS` contains the SHA256 of `_CATALOG.json`; partition digests cover exact
-file bytes. The release ID stays `ssp585-fixture-2026-10-08-v2`. Catalogue and
-`_SUCCESS` changed when coastal and river flood were added. An SDK cache that
-already stored the previous catalogue keeps it on `reuse`. `refresh` rejects
-the changed catalogue bytes, so use a new cache directory to read the flood rows.
+file bytes. Completed release IDs are immutable.
 
 ## Run the example
 
