@@ -1,12 +1,14 @@
-"""Evaluate the SSP585 fixture; optionally compare an ERA5 Rx1day baseline.
+"""Screen daily rainfall hazards for an illustrative Toronto portfolio.
 
-Run from crc-docs with crc-sdk 0.8.0a3 or later:
+Run with crc-sdk 0.8.1 or later:
   uv run python pipelines/crc_open_pipeline.py
 
-A historical comparison is a source/methodology cross-check, not a pure climate
-change estimate: ERA5 reanalysis and pooled bias-corrected projections differ.
+For your own CSV or Parquet assets, supply --assets and --bounds. Assets require
+asset_id, longitude and latitude columns. Outputs are hazard quantiles, not
+vulnerability or financial loss estimates. An optional ERA5 comparison uses a
+different source and methodology and is not a pure climate change estimate.
 
-See notebooks/crc_open_hazards.ipynb for catalogue exploration and city curves.
+See notebooks/crc_open_hazards.ipynb for coverage discovery and rendered charts.
 """
 
 from __future__ import annotations
@@ -19,45 +21,90 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 from crc_sdk.workflows import HazardDataset
+from pyarrow import csv
 
-RELEASE = "ssp585-fixture-2026-10-08-v2"
+RELEASE = "ssp585-global-2026-10-20-v1"
+SOURCE = "https://data.riskthinking.ai/crc-open"
+BOUNDS = (-79.52, 43.60, -79.25, 43.78)
+HORIZONS = (2030, 2050, 2080)
+RETURN_PERIODS = (10, 100)
+SITES = [
+    {"asset_id": "West depot", "longitude": -79.47, "latitude": 43.65},
+    {"asset_id": "Central clinic", "longitude": -79.38, "latitude": 43.65},
+    {"asset_id": "East warehouse", "longitude": -79.29, "latitude": 43.70},
+]
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--fixtures",
-        default=str(Path(__file__).resolve().parents[1] / "fixtures/crc_open"),
-        help="Local directory or HTTP root containing release directories",
+        "--source", default=SOURCE, help="Catalogue root URL or directory"
     )
+    parser.add_argument("--release", default=RELEASE, help="Pinned release ID")
+    parser.add_argument("--assets", type=Path, help="CSV or Parquet asset locations")
+    parser.add_argument(
+        "--bounds",
+        type=float,
+        nargs=4,
+        metavar=("WEST", "SOUTH", "EAST", "NORTH"),
+        help="Acquisition area; required with --assets",
+    )
+    parser.add_argument("--horizons", type=int, nargs="+", default=list(HORIZONS))
     parser.add_argument("--output", type=Path, default=Path("pipeline_output/crc_open"))
     parser.add_argument(
         "--era5-rx1day",
         type=Path,
-        help="Optional canonical ERA5 historical Rx1day Parquet",
+        help="Optional canonical ERA5 historical Rx1day Parquet for the same locations",
     )
     args = parser.parse_args()
+    if args.assets is not None and args.bounds is None:
+        parser.error("--assets requires --bounds to limit acquisition")
+    if args.assets is None:
+        assets = pa.Table.from_pylist(SITES)
+    elif args.assets.suffix.lower() == ".csv":
+        assets = csv.read_csv(args.assets)
+    else:
+        assets = pq.ParquetFile(args.assets).read()
     args.output.mkdir(parents=True, exist_ok=True)
-    assets = pa.table(
-        {"asset_id": ["Toronto"], "longitude": [-79.38], "latitude": [43.65]}
-    )
     plan = (
-        HazardDataset.crc_open(release=RELEASE, fixtures=args.fixtures)
-        .for_area((-79.5, 43.5, -79.2, 43.8))
+        HazardDataset.crc_open(release=args.release, source=args.source)
+        .for_area(args.bounds or BOUNDS)
         .hazards(["rx1day"])
-        .horizons([2050])
+        .horizons(args.horizons)
         .cache(args.output / "cache", mode="reuse")
     )
-    print(plan.explain())
+    selection = plan.resolve()
+    print(
+        json.dumps(
+            {
+                "release": selection.catalog.release,
+                "catalog_sha256": selection.catalog_sha256,
+                "partitions": len(selection.partitions),
+                "whole_file_bytes": selection.total_bytes,
+                "licence": selection.catalog.licence,
+                "attribution": selection.catalog.attribution,
+            },
+            indent=2,
+        )
+    )
     projected = (
         plan.for_assets(assets)
-        .return_periods([10, 100])
-        .write_parquet(args.output / "ssp585_2050.parquet")
+        .return_periods(RETURN_PERIODS)
+        .write_parquet(args.output / "ssp585_portfolio.parquet")
     )
     print(
         json.dumps(
-            pq.read_table(projected.output)
-            .select(["asset_id", "horizon", "pathway", *projected.value_columns])
+            pq.ParquetFile(projected.output)
+            .read()
+            .select(
+                [
+                    "asset_id",
+                    "horizon",
+                    "pathway",
+                    "spatial_match",
+                    *projected.value_columns,
+                ]
+            )
             .to_pylist(),
             indent=2,
         )
@@ -74,22 +121,25 @@ def main() -> None:
         historical = (
             baseline.for_assets(assets)
             .select(hazard_names=["rx1day"])
-            .return_periods([10, 100])
+            .return_periods(RETURN_PERIODS)
             .write_parquet(args.output / "era5_historical.parquet")
         )
-        historical_table = pq.read_table(historical.output)
+        historical_table = pq.ParquetFile(historical.output).read()
         if not any(
             pc.any(pc.is_finite(historical_table[column])).as_py()
             for column in historical.value_columns
         ):
-            raise LookupError(
-                "ERA5 baseline has no usable Rx1day return values for Toronto"
-            )
+            raise LookupError("ERA5 baseline has no usable Rx1day return values")
         print("ERA5 historical comparison (different source, period and methodology):")
         print(
             json.dumps(
                 historical_table.select(
-                    ["asset_id", "horizon", "pathway", *historical.value_columns]
+                    [
+                        "asset_id",
+                        "horizon",
+                        "pathway",
+                        *historical.value_columns,
+                    ]
                 ).to_pylist(),
                 indent=2,
             )

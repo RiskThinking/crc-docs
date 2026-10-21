@@ -46,48 +46,46 @@ licence. `_CATALOG.json` and the Parquet metadata record that licence.
 `_SUCCESS` contains the SHA256 of `_CATALOG.json`; partition digests cover exact
 file bytes. Completed release IDs are immutable.
 
-## Run the example
+## Public dataset examples
 
-Requires **crc-sdk 0.8.0a3 or later**, supplied by this repository's dependencies:
+The [portfolio pipeline](../../pipelines/crc_open_pipeline.py) and
+[notebook](../../notebooks/crc_open_hazards.ipynb) use the public CRC Open release
+`ssp585-global-2026-10-20-v1` by default, with **crc-sdk 0.8.1 or later**.
+They screen three illustrative Toronto locations across 2030, 2050 and 2080,
+inspect acquisition size and cell matches, and reuse verified local caches.
+The notebook includes executed tables and chart images for GitHub preview.
 
 ```bash
 uv sync
 uv run python pipelines/crc_open_pipeline.py
 ```
 
-The pipeline evaluates 2050 Rx1day at Toronto using the checked-in fixtures.
-The paired [notebook](../../notebooks/crc_open_hazards.ipynb) explores catalogue
-coverage, city return-value curves and horizon labels with the same SDK workflow.
-Pass an HTTP root with `--fixtures` to read remotely:
+For your own asset CSV or Parquet, provide a bounded acquisition area:
 
 ```bash
 uv run python pipelines/crc_open_pipeline.py \
-  --fixtures https://raw.githubusercontent.com/RiskThinking/crc-docs/main/fixtures/crc_open
+  --assets assets.csv --bounds -79.52 43.60 -79.25 43.78
 ```
 
-The SDK uses that HTTP root by default. For reproducibility, replace `main` with
-an immutable commit SHA. `source=` and `fixtures=` also accept directories
-containing release directories.
+## Inspect the sampled release
+
+The checked-in samples are retained for release inspection. The current SDK
+workflow examples use the public release above. Inspect fixture coverage directly
+from its catalogue:
 
 ```python
-from crc_sdk.workflows import HazardDataset
+import json
+from pathlib import Path
 
-plan = (
-    HazardDataset.crc_open(release="ssp585-fixture-2026-10-08-v2")
-    .for_area((-79.5, 43.5, -79.2, 43.8))
-    .hazards(["rx1day"])
-    .horizons([2050])
-    .cache("pipeline_output/crc_open/cache", mode="reuse")
-)
-plan.prefetch()
-dataset = plan.materialize("pipeline_output/crc_open/rx1day.parquet")
+root = Path("fixtures/crc_open/ssp585-fixture-2026-10-08-v2")
+catalog = json.loads((root / "_CATALOG.json").read_text())
+for partition in catalog["hazards"]["rx1day"]["partitions"]:
+    print(partition["h3_r0"], partition["rows"], partition["path"])
 ```
 
-`materialize_all(directory)` returns separate `HazardDataset`s to preserve each
-hazard's units, tail and native resolution. `reuse`, `refresh` and `offline` use
-verified persistent caches; `stream` verifies temporary downloads. Unsupported
-selections and areas without coverage raise clear errors. Fixture warnings occur
-at execution, while plan construction and `explain()` perform no I/O.
+The public adapter accepts another canonical catalogue using `source=` and a
+pinned `release=`. Materialized hazards retain their scientific metadata, units
+and native resolution. Missing coverage is not zero risk.
 
 ## Compare a historical baseline
 
