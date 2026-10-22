@@ -15,14 +15,15 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Sequence
-from dataclasses import replace
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from crc_sdk.workflows import (
     BlockExtremaPolicy,
+    GHCNhPlan,
     HazardDataset,
+    ISDPlan,
     curve_quantiles,
     return_periods_to_probabilities,
 )
@@ -44,24 +45,28 @@ def run(
         raise ValueError("source must be isd or ghcnh")
     factory = HazardDataset.isd if source == "isd" else HazardDataset.ghcnh
     output.mkdir(parents=True, exist_ok=True)
-    if bounds is not None:
-        selection = factory().for_area(bounds)
-    elif stations:
-        selection = factory().for_stations(stations)
-    else:
-        raise ValueError("supply station IDs or bounds")
-    base = (
-        selection.years(start, end)
-        .quality(minimum_hour_fraction=0.75, minimum_day_fraction=0.9)
-        .execution(workers=workers, memory_limit="256MB")
-        .cache(output / "cache", mode=mode)
-    )
+
+    def recipe_plan(recipe: str, cache_mode: str) -> ISDPlan | GHCNhPlan:
+        selection = factory(recipe)
+        if bounds is not None:
+            selection = selection.for_area(bounds)
+        elif stations:
+            selection = selection.for_stations(stations)
+        else:
+            raise ValueError("supply station IDs or bounds")
+        return (
+            selection.years(start, end)
+            .quality(minimum_hour_fraction=0.75, minimum_day_fraction=0.9)
+            .execution(workers=workers, memory_limit="256MB")
+            .cache(output / "cache", mode=cache_mode)
+        )
+
+    base = recipe_plan("temperature_max", mode)
     print(base.explain())
     if bounds is not None:
         metadata = base.stations()
         pq.write_table(metadata, output / "selected_stations.parquet")
         base = base.resolve_stations()
-        stations = list(base.selected_stations)
     prefetched = base.prefetch()
     periods = (2.0, 5.0, 10.0, 20.0, 50.0, 100.0)
     level_schema = pa.schema(
@@ -80,14 +85,13 @@ def run(
             ("temperature_max", "upper"),
             ("temperature_min", "lower"),
         ):
-            plan = (
-                replace(base, recipe=recipe)
-                .cache(output / "cache", mode="offline")
-                .canonicalize(
-                    policy=BlockExtremaPolicy.curated(
-                        minimum_years=minimum_years,
-                        diagnostics=output / f"{recipe}_diagnostics.parquet",
-                    )
+            plan = recipe_plan(recipe, "offline")
+            if bounds is not None:
+                plan = plan.resolve_stations()
+            plan = plan.canonicalize(
+                policy=BlockExtremaPolicy.curated(
+                    minimum_years=minimum_years,
+                    diagnostics=output / f"{recipe}_diagnostics.parquet",
                 )
             )
             plan.write_annual_extremes(output / f"{recipe}_annual.parquet")
