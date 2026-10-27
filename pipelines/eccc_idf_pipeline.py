@@ -184,7 +184,21 @@ def run(
     pq.write_table(
         pa.concat_tables(sources), output / "published_source_curves.parquet"
     )
-    pq.write_table(pa.Table.from_pylist(rows), output / "rainfall_rates.parquet")
+    rate_schema = pa.schema(
+        [(name, pa.string()) for name in ("station", "name", "version", "duration")]
+        + [(name, pa.float64()) for name in (
+            "latitude", "longitude", "published_mm_h", "confidence_95_half_width_mm_h",
+            "fitted_mm_h", "fit_residual_mm_h", "published_duration_depth_mm",
+        )]
+        + [(name, pa.int64()) for name in (
+            "start_year", "end_year", "record_years", "duration_minutes",
+            "return_period_years",
+        )]
+        + [("beyond_record_length", pa.bool_())]
+    )
+    pq.write_table(
+        pa.Table.from_pylist(rows, schema=rate_schema), output / "rainfall_rates.parquet"
+    )
     comparisons = (
         compare_releases(rows, version, compare_version) if compare_version else []
     )
@@ -203,7 +217,7 @@ def run(
         "rate_rows": len(rows),
         "comparison_rows": len(comparisons),
         "maximum_absolute_fit_residual_mm_h": max(
-            abs(r["fit_residual_mm_h"]) for r in rows
+            (abs(r["fit_residual_mm_h"]) for r in rows), default=None
         ),
         "interpretation": (
             "Published central rates and 95% confidence half-widths are distinct from "

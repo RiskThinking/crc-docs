@@ -121,3 +121,50 @@ def test_cli_passes_repeated_bounds_as_one_area_selection(monkeypatch):
     eccc_idf_pipeline.main()
     assert captured["stations"] is None
     assert captured["areas"] == [[-80, 43, -79, 44], [-78, 45, -77, 46]]
+
+
+def test_empty_fits_produce_typed_rates_and_null_residual(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+
+    import pyarrow as pa
+
+    from pipelines import eccc_idf_pipeline
+
+    class EmptyPlan:
+        requested_areas = ()
+
+        def for_areas(self, areas):
+            self.requested_areas = tuple(areas)
+            return self
+
+        def cache(self, *args, **kwargs):
+            return self
+
+        def explain(self):
+            return "empty selection"
+
+        def prefetch(self):
+            return SimpleNamespace(cache_hits=0, cache_misses=0)
+
+        def duration(self, duration):
+            return self
+
+        def canonicalize(self, **kwargs):
+            return self
+
+        def source_curves(self):
+            return pa.table({"station": pa.array([], type=pa.string())})
+
+        def materialize(self, path):
+            pq.write_table(pa.table({"source_id": pa.array([], type=pa.string())}), path)
+
+    monkeypatch.setattr(eccc_idf_pipeline.HazardDataset, "eccc_idf", lambda *a, **k: EmptyPlan())
+    summary = run(tmp_path, areas=[(-80, 43, -79, 44)], durations=("1h",))
+    rates = pq.read_table(tmp_path / "rainfall_rates.parquet")
+    assert rates.num_rows == 0
+    assert rates.schema.field("published_mm_h").type == pa.float64()
+    assert rates.schema.field("station").type == pa.string()
+    assert summary["rate_rows"] == 0
+    assert summary["maximum_absolute_fit_residual_mm_h"] is None
+    assert json.loads((tmp_path / "summary.json").read_text())["maximum_absolute_fit_residual_mm_h"] is None
