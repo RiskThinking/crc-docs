@@ -1,8 +1,26 @@
+import base64
 import json
+import struct
 from pathlib import Path
 
 
 NOTEBOOKS = sorted(Path("notebooks").glob("*.ipynb"))
+
+
+def test_flood_charts_have_static_github_previews() -> None:
+    notebook = json.loads(Path("notebooks/flood_risk_by_province.ipynb").read_text())
+    figures = [
+        output["data"]
+        for cell in notebook["cells"]
+        for output in cell.get("outputs", [])
+        if "application/vnd.plotly.v1+json" in output.get("data", {})
+    ]
+    assert len(figures) == 5
+    for figure in figures:
+        image = base64.b64decode(figure["image/png"], validate=True)
+        assert image.startswith(b"\x89PNG\r\n\x1a\n")
+        width, height = struct.unpack(">II", image[16:24])
+        assert width >= 600 and height >= 300
 
 
 def test_plotly_notebooks_use_browser_free_runtime_setup() -> None:
