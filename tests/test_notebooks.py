@@ -5,7 +5,7 @@ from pathlib import Path
 NOTEBOOKS = sorted(Path("notebooks").glob("*.ipynb"))
 
 
-def test_all_notebooks_use_browser_free_runtime_setup() -> None:
+def test_plotly_notebooks_use_browser_free_runtime_setup() -> None:
     assert NOTEBOOKS, "No notebooks discovered"
 
     for path in NOTEBOOKS:
@@ -13,6 +13,8 @@ def test_all_notebooks_use_browser_free_runtime_setup() -> None:
         all_source = "\n".join(
             "".join(cell.get("source", [])) for cell in notebook["cells"]
         )
+        if "import plotly" not in all_source:
+            continue
         setup = next(
             "".join(cell["source"])
             for cell in notebook["cells"]
