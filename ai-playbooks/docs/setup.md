@@ -96,8 +96,9 @@ uv run python pipelines/asset_portfolio_pipeline.py
 Use Python 3.12+. Notebook setup locates the checkout and selects its
 `notebooks/` working directory automatically. The lockfile records the tested
 local environment; standalone notebooks declare their own dependencies.
-`crc-sdk` supplies data access, canonicalization and workflows; `crc-framework` supplies numerical
-distributions, fitting, impacts and risk metrics. The SDK re-exports core APIs.
+Package APIs are documented by the packages: [crc-sdk](https://github.com/RiskThinking/crc-sdk/blob/main/docs/README.md) for
+data access, canonical datasets and workflows, and [crc-framework](https://github.com/RiskThinking/crc-framework-rs/blob/main/docs/README.md)
+for distributions, fitting, impacts and risk metrics.
 
 Standalone pipeline PMTiles export requires `tippecanoe` on PATH (and `tile-join`
 for merging); the notebooks that export tiles install these binaries themselves.

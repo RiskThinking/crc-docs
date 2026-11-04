@@ -1,13 +1,12 @@
 """Audit ECCC design rainfall rates, their canonical refits and release changes.
 
-Run against a local crc-sdk checkout with the geometry extra:
-    uv pip install --python .venv/bin/python --no-deps --editable ../crc-sdk
-    uv run --no-sync python pipelines/eccc_idf_pipeline.py
-    uv run --no-sync python pipelines/eccc_idf_pipeline.py \
+Run from the repository root after ``uv sync --locked``:
+    uv run python pipelines/eccc_idf_pipeline.py
+    uv run python pipelines/eccc_idf_pipeline.py \
         --compare-version 3.20 --cache-mode offline
 
 Use repeated --bounds arguments instead of --stations for a union of areas:
-    uv run --no-sync python pipelines/eccc_idf_pipeline.py --province ON \
+    uv run python pipelines/eccc_idf_pipeline.py --province ON \
         --bounds -79.65 43.65 -79.61 43.70 --bounds -75.70 45.30 -75.65 45.35
 
 All boxes are within the chosen province; overlaps never duplicate stations.

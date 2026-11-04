@@ -50,7 +50,7 @@ file bytes. Completed release IDs are immutable.
 
 The [portfolio pipeline](../../pipelines/crc_open_pipeline.py) and
 [notebook](../../notebooks/crc_open_hazards.ipynb) use the public CRC Open release
-`ssp585-global-2026-10-20-v1` by default, with **crc-sdk 0.8.1 or later**.
+`ssp585-global-2026-10-20-v1` by default.
 They screen three illustrative Toronto locations across 2030, 2050 and 2080,
 inspect acquisition size and cell matches, and reuse verified local caches.
 The notebook includes executed tables and chart images for GitHub preview.
@@ -83,9 +83,9 @@ for partition in catalog["hazards"]["rx1day"]["partitions"]:
     print(partition["h3_r0"], partition["rows"], partition["path"])
 ```
 
-The public adapter accepts another canonical catalogue using `source=` and a
-pinned `release=`. Materialized hazards retain their scientific metadata, units
-and native resolution. Missing coverage is not zero risk.
+The SDK's [CRC Open page](https://github.com/RiskThinking/crc-sdk/blob/main/docs/sources/crc-open.md)
+documents the adapter, other catalogues and pinned releases. Missing coverage
+is not zero risk.
 
 ## Compare a historical baseline
 

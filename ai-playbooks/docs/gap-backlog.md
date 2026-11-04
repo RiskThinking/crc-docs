@@ -1,17 +1,20 @@
 # Gap backlog
 
-Reviewed against crc-sdk 0.7.1 / crc-framework 0.2.5 on 2026-09-15.
-These are proposed workflow improvements, not missing numerical primitives;
-see the [capability matrix](capability-matrix.md) for what already exists.
+Reviewed against crc-sdk 0.7.1 / crc-framework 0.2.5 on 2026-09-15; updated
+for crc-sdk 0.11.0 on 2026-11-04. These are proposed workflow improvements, not
+missing numerical primitives; see the [capability matrix](capability-matrix.md)
+for what already exists.
+
+Done since the review: canonical metadata records the installed SDK version as
+`creation_version`, and `HazardDataset.from_table`, `from_zarr` and
+`from_raster` onboard new datasets ([bring your own data](https://github.com/RiskThinking/crc-sdk/blob/main/docs/bring-your-own-data.md)).
 
 ## CRC-side workflow gaps
 
 | Priority | Gap | Why it unlocks use cases | Suggested increment |
 |---|---|---|---|
 | P0 | Multi-hazard portfolio orchestration | The bundled wrapper already evaluates separate datasets; alignment and joint modelling remain caller responsibilities | Add `PortfolioAssessment` over multiple `HazardDataset` objects with scenario alignment, missingness policy, and bounded branch computation |
-| P0 | Runtime producer version in metadata | The 0.7.1 live JRC run reported `creation_version=0.2.0` | Derive producer version from the installed package and test it; preserve historical metadata unchanged |
 | P0 | Assessment manifest and evidence export | Model-risk, compliance, and sales demos need one auditable artifact | Emit JSON containing package/data versions, hashes, filters, units, probability convention, impact functions, warnings, row counts, and unresolved assets |
-| P0 | Dataset onboarding workflow | Zarr/GeoTIFF/Parquet primitives are capable but too low-level for new community datasets | Add `HazardDataset.from_raster/from_zarr/from_table` builders with schema validation, fit policy, coverage estimate, and conformance fixtures |
 | P0 | Future open CDT adapter | Preserves one downstream workflow across open and proprietary fronts | Map the released dataset directly into the canonical hazard contract; publish checksummed example subsets |
 | P1 | Vulnerability/damage-function packs | Framework impact transforms and a context-aware registry already exist; these demos still need approved domain calibration | Document registry coverage and add cited, versioned domain calibrations with applicability and uncertainty bounds |
 | P1 | Scenario/horizon crosswalk | Open sources and CDT pathways may not align | Add explicit scenario vocabulary, equivalence rules, and “not comparable” diagnostics |

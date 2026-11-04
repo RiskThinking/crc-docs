@@ -1,5 +1,8 @@
 # Verification and lineage audit
 
+This is a dated record. Package versions have moved on since; `uv.lock` pins
+the current tested environment. Run [Reproduce](#reproduce) for a fresh audit.
+
 Verified on **2026-09-15** using the published **crc-sdk 0.7.1** and
 **crc-framework 0.2.5** wheels, with **velo-sdk 0.0.20** for SDK fallback tests.
 The environment was resolved from PyPI, not sibling editable checkouts.
@@ -55,19 +58,6 @@ time in each notebook's `crc_preview` metadata.
 | `velo-triage-portfolio-insurability` | Company A, SSP2-4.5/2050 | Company B, SSP5-8.5/2070 | Pass with API double: company/scenario changed and classifications followed the selected company |
 | `velo-assess-company-climate-risk` | Single company | Market index | Pass with API double after adding explicit `--company-id` / `--index-id` routing |
 | `compare-crc-velo-assessments` | Flood/property assessment pair | Drought/market-index assessment pair | Pass: both CRC and VELO artifact shapes changed while non-equivalence remained explicit |
-
-## Corrections from this audit
-
-- Replaced repeated route tables with the README's problem-to-skill-to-code map;
-  notebooks link back to their skill and setup instructions.
-- Removed old SDK 0.3.0 installation instructions and upgraded the locked packages.
-- Verified the agricultural skill's playbook link and documented its GloFAS default,
-  one-hazard-per-run interface and H3-only evaluation precision.
-- Updated canonical schema, impact-registry and direct MCP asset-scoring claims.
-- Fixed flood/drought CLI summaries that assumed all curve values were numeric;
-  agricultural map summaries now label matched null values separately from
-  locations outside coverage.
-- Distinguished helpers' data outputs from the full report an assistant assembles.
 
 ## Validation limits
 

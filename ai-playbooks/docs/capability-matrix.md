@@ -1,31 +1,26 @@
 # Capability matrix
 
-Baseline checked on 2026-09-15: published [crc-sdk 0.7.1](https://pypi.org/project/crc-sdk/0.7.1/)
-and [crc-framework 0.2.5](https://pypi.org/project/crc-framework/0.2.5/).
-The repository lockfile pins the tested environment. Runtime validation and its
-limits are recorded in [verification](dogfood-verification.md).
+What the open packages can do is documented in the
+[crc-sdk docs](https://github.com/RiskThinking/crc-sdk/blob/main/docs/README.md) and [crc-framework docs](https://github.com/RiskThinking/crc-framework-rs/blob/main/docs/README.md). This
+page records only the interpretation limits that matter in an assessment.
+`uv.lock` pins the tested environment; [verification](dogfood-verification.md)
+records how the skills were last checked.
 
 ## Open computation and workflows
 
-| Capability | Available surface | Limits and example use |
+| Capability | Reference | Limits and example use |
 |---|---|---|
-| Probability and fitting | Framework empirical, tabulated, fitted, hurdle and point-mass distributions; explicit fitting and diagnostics | A hurdle's dry-event atom is a modelling assumption. Inspect fit policy and source support; do not assume every source row has a parametric fit. |
-| Canonical hazard storage | SDK Arrow/Parquet contract, metadata, validation and streaming writers | Schema 1.2 adds tabulated probability/value lists and explicit `no_data` reason codes alongside fitted, hurdle and point-mass rows. Use SDK readers/evaluators instead of extracting only scalar fit parameters. |
-| Source acquisition | Lazy EFAS/GloFAS flood and EDO SMI drought plans with bounded areas, versioned caches and curated policies | Read resolved source, units, tail and support; summarize curve kinds and retain any available treatment diagnostics. Historical observations do not supply future climate projections. |
-| Agricultural evidence | `AgriculturalLayer.usda_cdl()` and `.ftw_fields()` with bounded scans and the common DuckDB/Arrow processing surface | Crop samples and predicted fields do not establish yield, ownership or financial materiality. See the [agricultural playbook](../agricultural-climate-risk.md). |
-| Other data | GeoTIFF/COG, Zarr, NetCDF, Arrow/Parquet, JSON/SQL through DuckDB; explicit canonical writers | Format access is available; an arbitrary dataset still needs a scientifically justified canonicalization policy. OS-Climate fixtures run locally; the live feed is not validated here. |
-| Spatial processing | H3 indexing, source-geometry refinement, admin overlays, coverage/lookup writers and PMTiles | Point matching can refine H3 candidates against source WKB. H3-only assets retain cell precision; regional max/min summaries are not exact asset assessments. PMTiles needs external tiling tools. |
-| Portfolio evaluation | `HazardDataset.local(...).for_assets(...).select(...).return_periods(...)` | One row per asset/hazard/scenario; ambiguous and unmatched joins raise. A matched `no_data` curve instead yields null values. Preserve both coverage and value availability. |
-| Event-aligned impact | `.impact(...)`, framework transforms and registry-backed impacts with `ImpactContextColumns` | Evaluates the impact at each hazard return period. This is not necessarily a quantile of the transformed loss distribution. Registry availability does not establish applicability to an insured exposure. |
-| Risk aggregation | Framework microscores, binary outcomes, spanning sets, VaR/CVaR and attribution | Basic branch construction assumes independent outcomes and grows as `2**n`; set branch limits. The example threshold model is not a full joint continuous-loss model. |
-| Multi-hazard/scenario work | Scenario filters and multi-scenario canonical evaluation; repository wrapper loops over separate hazards | There is no automatic cross-hazard score, dependence calibration or scenario-equivalence policy. Keep incompatible results separate. |
-| Evidence | Canonical source/evaluation metadata; agricultural manifest and preserved result files | A complete assessment-wide report, hashes, coverage exceptions and semantic comparison remain the skill's responsibility. |
-
-The logical hazard key includes hazard, horizon, pathway, H3 cell and source ID;
-a cell can intersect more than one source pixel. Ordered canonical writes sort
-and validate keys using DuckDB, which may spill. `write_hazard_stream(...,
-ordered=False)` offers validated direct streaming without global physical sort.
-Neither option removes the need to budget memory, temporary disk and output size.
+| Probability and fitting | [SDK fitting](https://github.com/RiskThinking/crc-sdk/blob/main/docs/fitting.md); [framework Python API](https://github.com/RiskThinking/crc-framework-rs/blob/main/docs/python.md) | A hurdle's dry-event atom is a modelling assumption. Inspect fit policy and source support; do not assume every source row has a parametric fit. |
+| Canonical hazard data | [SDK concepts](https://github.com/RiskThinking/crc-sdk/blob/main/docs/concepts.md#canonical-hazard-datasets) | Use SDK readers and evaluators instead of extracting only scalar fit parameters. `no_data` rows carry reason codes and are not zero risk. |
+| Source acquisition | [SDK data sources](https://github.com/RiskThinking/crc-sdk/blob/main/docs/README.md#data-sources) | Read resolved source, units, tail and support; summarize curve kinds and retain treatment diagnostics. Historical observations do not supply future climate projections. |
+| Agricultural evidence | [SDK agriculture](https://github.com/RiskThinking/crc-sdk/blob/main/docs/sources/agriculture.md); [agricultural playbook](../agricultural-climate-risk.md) | Crop samples and predicted fields do not establish yield, ownership or financial materiality. |
+| Your own data | [SDK bring your own data](https://github.com/RiskThinking/crc-sdk/blob/main/docs/bring-your-own-data.md) | Format access is available; an arbitrary dataset still needs a scientifically justified canonicalization policy. |
+| Spatial processing | [SDK spatial support](https://github.com/RiskThinking/crc-sdk/blob/main/docs/concepts.md#spatial-support); [runtime](https://github.com/RiskThinking/crc-sdk/blob/main/docs/runtime.md) | H3-only assets keep cell precision; regional max/min summaries are not exact asset assessments. PMTiles needs external tiling tools. |
+| Portfolio evaluation | [SDK portfolio](https://github.com/RiskThinking/crc-sdk/blob/main/docs/portfolio.md) | Ambiguous and unmatched joins raise; a matched `no_data` curve yields null values. Report both coverage and value availability. |
+| Event-aligned impact | [SDK impacts](https://github.com/RiskThinking/crc-sdk/blob/main/docs/portfolio.md#apply-an-impact-function); [impact contracts](https://github.com/RiskThinking/crc-framework-rs/blob/main/docs/impact-contracts.md) | Evaluates the impact at each hazard return period, which is not necessarily a quantile of the transformed loss distribution. Registry availability does not establish applicability to an insured exposure. |
+| Risk aggregation | [framework Python API](https://github.com/RiskThinking/crc-framework-rs/blob/main/docs/python.md) | Basic branch construction assumes independent outcomes and grows as `2**n`; set branch limits. The example threshold model is not a full joint continuous-loss model. |
+| Multi-hazard/scenario work | Repository wrapper over separate hazards | There is no automatic cross-hazard score, dependence calibration or scenario-equivalence policy. Keep incompatible results separate. |
+| Evidence | Canonical metadata; agricultural manifest | A complete assessment-wide report, hashes, coverage exceptions and semantic comparison remain the skill's responsibility. |
 
 ## VELO/CDT access
 
