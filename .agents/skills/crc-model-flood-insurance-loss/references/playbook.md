@@ -30,4 +30,4 @@ Use `crc-framework` distribution transformation and risk metrics only when the r
 - Calibration period and observed claims evidence.
 - Uncertainty bounds.
 
-The bundled script accepts comma-separated depth and ratio knots and constructs `PiecewiseLinearImpact`. It is reproducible but not actuarially calibrated by itself.
+The bundled script accepts an approved `ImpactExpression` definition (`--curve-json`) or comma-separated depth and ratio knots, which it turns into a tabulated `ImpactExpression` with the same linear interpolation and flat ends. Either way it writes the definition beside the output and records its `definition_hash` in the output metadata, so a result can be traced to the exact curve. It is reproducible but not actuarially calibrated by itself.

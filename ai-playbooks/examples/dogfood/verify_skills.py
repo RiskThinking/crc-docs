@@ -20,6 +20,7 @@ import pyarrow.parquet as pq
 
 from crc_sdk.connectors import read_hazard_dataset, read_hazard_metadata
 from crc_sdk.connectors.parquet import hazard_arrow_schema, write_hazard_dataset
+from crc_sdk.impacts import ImpactCalibration, ImpactExpression
 from crc_sdk.types import SourceProvenance
 
 sys.dont_write_bytecode = True
@@ -338,9 +339,20 @@ def dogfood_loss(directory: Path, portfolios: tuple[Path, Path]) -> dict[str, An
     hazard = multi_scenario_flood(directory / "multi-scenario-flood.parquet")
     outputs = [directory / "loss-alpha.parquet", directory / "loss-beta.parquet"]
     command(sys.executable, script, "--hazard", hazard, "--assets", portfolios[0], "--output", outputs[0], "--periods", "25", "100", "--pathway", "historical", "--horizon", "1980", "--depth-knots", "0,0.2,1,2", "--damage-knots", "0,0,0.25,1", "--workers", "1")
-    command(sys.executable, script, "--hazard", hazard, "--assets", portfolios[1], "--output", outputs[1], "--periods", "50", "500", "--pathway", "synthetic-stress", "--horizon", "2050", "--depth-knots", "0,0.5,1.5,3", "--damage-knots", "0,0.1,0.5,1", "--workers", "1")
+    beta_curve = ImpactExpression.tabulated(
+        [(0.0, 0.0), (0.5, 0.1), (1.5, 0.5), (3.0, 1.0)],
+        calibration=ImpactCalibration(exposure_variable="flood_depth", exposure_unit="m", impact_metric="damage_ratio", impact_unit="1"),
+        clamp={"minimum": 0.0, "maximum": 1.0},
+    )
+    beta_curve_path = directory / "approved-curve.json"
+    beta_curve_path.write_text(beta_curve.to_json())
+    command(sys.executable, script, "--hazard", hazard, "--assets", portfolios[1], "--output", outputs[1], "--periods", "50", "500", "--pathway", "synthetic-stress", "--horizon", "2050", "--curve-json", beta_curve_path, "--workers", "1")
     alpha = pq.read_table(outputs[0])
     beta = pq.read_table(outputs[1])
+    alpha_curve = ImpactExpression.from_json(outputs[0].with_name("loss-alpha-curve.json").read_text())
+    for table, curve in ((alpha, alpha_curve), (beta, beta_curve)):
+        recorded = json.loads(table.schema.metadata[b"crc.hazard.evaluation"])["impact"]
+        assert recorded["definition_hash"] == curve.definition_hash
     assert alpha.num_rows == 1 and set(alpha["pathway"].to_pylist()) == {"historical"} and set(alpha["horizon"].to_pylist()) == {1980}
     assert beta.num_rows == 2 and set(beta["pathway"].to_pylist()) == {"synthetic-stress"} and set(beta["horizon"].to_pylist()) == {2050}
     return {"skill": "crc-model-flood-insurance-loss", "targets": ["historical/1980 single warehouse", "synthetic-stress/2050 two assets"], "result": "pass"}

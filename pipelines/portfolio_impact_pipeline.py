@@ -6,8 +6,9 @@ Run with:
 
 Reuses the checked-in Cologne riverine fixture, then writes both raw flood-depth
 and damage-ratio evaluations so dollar losses can be derived from replacement
-values. Pass a picklable top-level impact (as here) to keep ``--max-workers``
-greater than one available.
+values. The curve is an ``ImpactExpression``: a persisted, hashable definition
+whose ``definition_hash`` is recorded in the impact output's metadata. It is
+picklable, so ``--max-workers`` can stay greater than one.
 """
 
 from __future__ import annotations
@@ -15,11 +16,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import json
+
 import numpy as np
 import pyarrow.parquet as pq
 
 from crc_sdk.connectors import read_hazard_dataset
-from crc_sdk.impacts import PiecewiseLinearImpact
+from crc_sdk.impacts import ImpactCalibration, ImpactExpression
 from crc_sdk.workflows import ExecutionOptions, HazardDataset
 
 HAZARD_NAME = "RiverineInundation"
@@ -27,9 +30,17 @@ PATHWAY = "historical"
 HORIZON = 1980
 
 # Hypothetical depth–damage curve: flood depth (m) → fractional damage.
-DEPTH_DAMAGE = PiecewiseLinearImpact(
-    exposure=[0.0, 0.1, 0.5, 1.0, 2.0, 4.0],
-    impact=[0.0, 0.01, 0.08, 0.22, 0.55, 1.0],
+DEPTH_KNOTS = [0.0, 0.1, 0.5, 1.0, 2.0, 4.0]
+DAMAGE_KNOTS = [0.0, 0.01, 0.08, 0.22, 0.55, 1.0]
+DEPTH_DAMAGE = ImpactExpression.tabulated(
+    list(zip(DEPTH_KNOTS, DAMAGE_KNOTS)),
+    calibration=ImpactCalibration(
+        exposure_variable="flood_depth",
+        exposure_unit="m",
+        impact_metric="damage_ratio",
+        impact_unit="1",
+    ),
+    clamp={"minimum": 0.0, "maximum": 1.0},
 )
 
 
@@ -93,6 +104,12 @@ def main() -> None:
         value_semantics="hypothetical fractional asset damage",
     ).write_parquet(impact_path, execution=execution)
 
+    metadata = pq.read_schema(impact_path).metadata or {}
+    recorded = json.loads(metadata[b"crc.hazard.evaluation"])["impact"]
+    if recorded.get("definition_hash") != DEPTH_DAMAGE.definition_hash:
+        raise RuntimeError("impact metadata does not record the curve's definition_hash")
+    print(f"curve: {DEPTH_DAMAGE.definition_hash}")
+
     raw = pq.read_table(raw_path).to_pandas().set_index("asset_id")
     impacted = pq.read_table(impact_path).to_pandas().set_index("asset_id")
     print(
@@ -104,7 +121,7 @@ def main() -> None:
         for period, column in zip(args.return_periods, raw_result.value_columns):
             depth = float(raw_row[column])
             ratio = float(impact_row[column])
-            expected = float(DEPTH_DAMAGE.evaluate(np.asarray([depth]))[0])
+            expected = float(DEPTH_DAMAGE.evaluate([depth])[0])
             if not np.isclose(ratio, expected):
                 raise RuntimeError(
                     f"{asset_id} {column} impact mismatch: {ratio} != {expected}"

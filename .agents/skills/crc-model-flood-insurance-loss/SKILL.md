@@ -58,7 +58,7 @@ reporting and interpretation steps below in the assistant workflow.
 ## Workflow
 
 1. Require a CRC canonical flood Parquet file and an asset CSV with `asset_id`, `longitude`, and `latitude`.
-2. Obtain an approved depth-damage curve with depth and damage-ratio knots. If none is supplied, use an illustrative curve only and label every result non-production.
+2. Obtain an approved depth-damage curve, either as an `ImpactExpression` definition JSON (`--curve-json`) or as depth and damage-ratio knots. If none is supplied, use an illustrative curve only and label every result non-production. The script records the curve's `definition_hash` in the output metadata and writes the definition beside the output.
 3. Require exactly one pathway and horizon, then select both before evaluating return periods. Never let a multi-scenario canonical file silently expand the loss output.
 4. Read [references/playbook.md](references/playbook.md) to preserve the event-aligned return-period interpretation.
 5. For the user-facing open demo, acquire Overture candidates and canonical JRC flood as described above, then run `scripts/model_flood_loss.py`. Use `notebooks/portfolio_impact.ipynb` or `pipelines/portfolio_impact_pipeline.py` only for a technical, checked-in learning example.
@@ -68,14 +68,14 @@ reporting and interpretation steps below in the assistant workflow.
 
 ## Required output
 
-Include the exact curve knots/version/source, event-aligned semantics, asset coverage, damage ratios by return period, concentration observations, uncertainty/limitations, and recommended calibration or engineering review.
+Include the exact curve knots, its `definition_hash`, version and source, event-aligned semantics, asset coverage, damage ratios by return period, concentration observations, uncertainty/limitations, and recommended calibration or engineering review.
 
 ## Deliverable bundle
 
 Retain the event-aligned loss Parquet and its canonical hazard input. Also
-create an analysis-ready CSV, asset GeoJSON, curve-knots CSV, and a
-self-contained HTML report with a manifest recording scenario, units, curve,
-and coverage. In the response, show a compact table sorted by the largest
+create an analysis-ready CSV, asset GeoJSON, the curve definition JSON written by
+the script, and a self-contained HTML report with a manifest recording scenario,
+units, curve `definition_hash`, and coverage. In the response, show a compact table sorted by the largest
 damage ratio with asset, match status, flood depth, damage ratio, and return
 period. Include:
 
