@@ -107,3 +107,52 @@ def test_how_hard_rain_cdt() -> None:
     # Plausible Toronto wettest days, and a wetter high-emissions future.
     assert 20 < levels["historic 2010"][10] < 100
     assert levels["ssp585 2070-2090"][10] > levels["historic 2010"][10]
+
+
+def test_which_sites_pipeline(tmp_path: Path) -> None:
+    from pipelines.which_sites_are_most_at_risk import main
+
+    sites = tmp_path / "sites.csv"
+    sites.write_text(
+        "site,latitude,longitude\n"
+        "Phoenix,33.45,-112.07\nToronto,43.65,-79.38\nMiami,25.77,-80.19\n"
+    )
+    summary = main(
+        [
+            "--sites",
+            str(sites),
+            "--output",
+            str(tmp_path / "out"),
+            "--era5-years",
+            "2018",
+            "2021",
+            "--skip-cdt",
+        ]
+    )
+    assert summary["a_era5"]["available"]
+    table = summary["b_crc_open"]["one_in_10"]
+    assert set(table) == {"Phoenix", "Toronto", "Miami"}
+    assert all(table[site]["tx_max"]["change"] > 0 for site in table)
+    assert set(summary["b_crc_open"]["largest_change"]) == {
+        "tx_max",
+        "rx1day",
+        "hot_days",
+        "fwi",
+    }
+
+
+@pytest.mark.skipif(
+    not os.environ.get("RISKTHINKING_API_KEY"), reason="needs a CDT API key"
+)
+def test_which_sites_cdt() -> None:
+    pytest.importorskip("velo_sdk")
+    from pipelines.which_sites_are_most_at_risk import cdt_answer
+
+    sites = [
+        {"site": "Phoenix", "latitude": 33.45, "longitude": -112.07},
+        {"site": "Toronto", "latitude": 43.65, "longitude": -79.38},
+    ]
+    table = cdt_answer(sites)["one_in_10"]
+    for site in table:
+        hot = table[site]["hot_days"]
+        assert hot["ssp585 2070-2090"] > hot["historic 2010"]
