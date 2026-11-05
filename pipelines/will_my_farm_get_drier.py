@@ -284,11 +284,19 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
 
     if crc_open["available"]:
         m = crc_open["measures"]
+        spell = m["longest_dry_spell_1_in_10_days"]
+        trend = (
+            "grows"
+            if spell["2070-2080"] > spell["2025-2035"]
+            else "shrinks"
+            if spell["2070-2080"] < spell["2025-2035"]
+            else "changes"
+        )
         answer = (
             f"At {args.name}, a 1-in-10 dry year brings about "
             f"{m['annual_rain_1_in_10_dry_mm']['2025-2035']:.0f} mm of rain in "
             f"2025-2035 and about {m['annual_rain_1_in_10_dry_mm']['2070-2080']:.0f} mm "
-            f"in 2070-2080 (CRC Open, SSP585). The 1-in-10-year longest dry spell grows "
+            f"in 2070-2080 (CRC Open, SSP585). The 1-in-10-year longest dry spell {trend} "
             f"from {m['longest_dry_spell_1_in_10_days']['2025-2035']:.0f} to "
             f"{m['longest_dry_spell_1_in_10_days']['2070-2080']:.0f} days."
         )
