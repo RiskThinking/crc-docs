@@ -8,7 +8,7 @@ asset_id, longitude and latitude columns. Outputs are hazard quantiles, not
 vulnerability or financial loss estimates. An optional ERA5 comparison uses a
 different source and methodology and is not a pure climate change estimate.
 
-See notebooks/crc_open_hazards.ipynb for coverage discovery and rendered charts.
+See notebooks/sources/crc_open_hazards.ipynb for coverage discovery and rendered charts.
 """
 
 from __future__ import annotations

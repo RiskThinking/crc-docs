@@ -4,7 +4,7 @@ Use the repository environment: `uv sync --locked`. See [setup](../../../../ai-p
 
 ## Native crc-docs examples
 
-- `notebooks/jrc_global_flood_hazard.ipynb` and `pipelines/jrc_flood_pipeline.py` demonstrate GloFAS acquisition and fitted return-period curves.
+- `notebooks/sources/jrc_global_flood_hazard.ipynb` and `pipelines/jrc_flood_pipeline.py` demonstrate GloFAS acquisition and fitted return-period curves.
 - `notebooks/flood_risk_by_province.ipynb` and `pipelines/flood_admin_pipeline.py` demonstrate EFAS spatial aggregation.
 - Use the bundled asset script when the decision object is collateral rather than an AOI.
 
