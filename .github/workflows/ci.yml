@@ -34,11 +34,20 @@ jobs:
 
       - name: Lint
         run: |
-          uv run ruff check pipelines tests
-          uv run ruff format --check pipelines tests
+          uv run ruff check pipelines tests tools
+          uv run ruff format --check pipelines tests tools
 
       - name: Offline tests (saved notebook outputs, pipelines)
         run: uv run pytest -q
+
+      - name: Package skills for upload
+        run: uv run python tools/package_skills.py
+
+      - name: Upload skill packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: skills
+          path: dist/skills
 
   live:
     name: Execute notebooks and pipelines on live data
