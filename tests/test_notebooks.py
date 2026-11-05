@@ -57,9 +57,16 @@ def test_current_notebook_has_saved_previews(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", CURRENT, ids=str)
-def test_current_notebook_saves_no_enterprise_results(path: Path) -> None:
+def test_current_notebook_keeps_enterprise_results_small(path: Path) -> None:
+    """CDT results may be committed only as small aggregated tables and charts."""
     notebook = nbformat.read(path, as_version=4)
+    expects_results = notebook.metadata["crc_docs"].get("cdt_outputs", False)
     for cell in notebook.cells:
-        if cell.cell_type == "code" and "velo_sdk" in cell.source:
+        if cell.cell_type != "code" or "velo_sdk" not in cell.source:
+            continue
+        saved = json.dumps([dict(output) for output in cell.outputs])
+        assert len(saved) < 20_000, "CDT outputs must be aggregated, not raw"
+        assert "exposure_distribution" not in saved
+        if expects_results:
             rich = [output for output in cell.outputs if output.output_type != "stream"]
-            assert not rich, "CDT results must not be committed"
+            assert rich, "re-run with a CDT key before committing (cdt_outputs)"
