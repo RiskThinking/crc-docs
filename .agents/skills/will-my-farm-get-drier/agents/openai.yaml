@@ -1,0 +1,4 @@
+interface:
+  display_name: "Will My Farm Get Drier?"
+  short_description: "Rain, dry days and dry spells for any farm, now and later this century"
+  default_prompt: "Will my farm get less rain and longer dry spells in the future?"
