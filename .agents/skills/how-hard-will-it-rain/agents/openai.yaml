@@ -1,0 +1,4 @@
+interface:
+  display_name: "How Hard Will It Rain?"
+  short_description: "Heaviest one-day rain for any place, now and later this century"
+  default_prompt: "How much rain can fall in one day where I live, and is it getting worse?"
