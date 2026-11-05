@@ -8,7 +8,9 @@ import nbformat
 
 
 def test_crc_open_notebook_has_portable_executed_outputs():
-    notebook = nbformat.read(Path("notebooks/crc_open_hazards.ipynb"), as_version=4)
+    notebook = nbformat.read(
+        Path("notebooks/sources/crc_open_hazards.ipynb"), as_version=4
+    )
     nbformat.validate(notebook)
     code = [cell for cell in notebook.cells if cell.cell_type == "code"]
     assert [cell.execution_count for cell in code] == list(range(1, len(code) + 1))
