@@ -76,3 +76,34 @@ def test_how_hot_cdt() -> None:
     # Plausible Phoenix hottest days, and warmer futures than the baseline.
     assert 40 < levels["historic 2010"][10] < 55
     assert levels["ssp585 2050"][10] > levels["historic 2010"][10]
+
+
+def test_how_hard_rain_pipeline(tmp_path: Path) -> None:
+    from pipelines.how_hard_will_it_rain import main
+
+    summary = main(
+        ["--output", str(tmp_path), "--era5-years", "2018", "2021", "--skip-cdt"]
+    )
+    assert summary["a_era5"]["available"]
+    crc_open = summary["b_crc_open"]
+    assert crc_open["late_1_in_10_mm"] > crc_open["baseline_1_in_10_mm"]
+    assert (tmp_path / "return_levels.csv").read_text().count("\n") > 10
+
+
+@pytest.mark.skipif(
+    not os.environ.get("RISKTHINKING_API_KEY"), reason="needs a CDT API key"
+)
+def test_how_hard_rain_cdt() -> None:
+    pytest.importorskip("velo_sdk")
+    from pipelines.how_hard_will_it_rain import cdt_answer
+
+    levels = cdt_answer(43.65, -79.38)["return_levels_mm"]
+    assert set(levels) == {
+        "historic 2010",
+        "ssp126 2070-2090",
+        "ssp245 2070-2090",
+        "ssp585 2070-2090",
+    }
+    # Plausible Toronto wettest days, and a wetter high-emissions future.
+    assert 20 < levels["historic 2010"][10] < 100
+    assert levels["ssp585 2070-2090"][10] > levels["historic 2010"][10]
