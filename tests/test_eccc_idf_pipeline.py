@@ -157,9 +157,13 @@ def test_empty_fits_produce_typed_rates_and_null_residual(tmp_path, monkeypatch)
             return pa.table({"station": pa.array([], type=pa.string())})
 
         def materialize(self, path):
-            pq.write_table(pa.table({"source_id": pa.array([], type=pa.string())}), path)
+            pq.write_table(
+                pa.table({"source_id": pa.array([], type=pa.string())}), path
+            )
 
-    monkeypatch.setattr(eccc_idf_pipeline.HazardDataset, "eccc_idf", lambda *a, **k: EmptyPlan())
+    monkeypatch.setattr(
+        eccc_idf_pipeline.HazardDataset, "eccc_idf", lambda *a, **k: EmptyPlan()
+    )
     summary = run(tmp_path, areas=[(-80, 43, -79, 44)], durations=("1h",))
     rates = pq.read_table(tmp_path / "rainfall_rates.parquet")
     assert rates.num_rows == 0
@@ -167,4 +171,9 @@ def test_empty_fits_produce_typed_rates_and_null_residual(tmp_path, monkeypatch)
     assert rates.schema.field("station").type == pa.string()
     assert summary["rate_rows"] == 0
     assert summary["maximum_absolute_fit_residual_mm_h"] is None
-    assert json.loads((tmp_path / "summary.json").read_text())["maximum_absolute_fit_residual_mm_h"] is None
+    assert (
+        json.loads((tmp_path / "summary.json").read_text())[
+            "maximum_absolute_fit_residual_mm_h"
+        ]
+        is None
+    )

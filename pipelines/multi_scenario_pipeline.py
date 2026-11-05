@@ -19,7 +19,6 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-
 from crc_sdk.connectors import (
     read_hazard_dataset,
     read_hazard_metadata,
@@ -122,7 +121,9 @@ def main() -> None:
     print(f"evaluated rows: {result.row_count}")
     print(f"value columns: {', '.join(result.value_columns)}")
     summary = (
-        evaluated.groupby(["pathway", "horizon"], as_index=False)[list(result.value_columns)]
+        evaluated.groupby(["pathway", "horizon"], as_index=False)[
+            list(result.value_columns)
+        ]
         .mean(numeric_only=True)
         .sort_values(["horizon", "pathway"])
     )

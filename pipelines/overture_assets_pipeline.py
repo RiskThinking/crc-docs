@@ -20,16 +20,13 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow.csv as pacsv
-
 from crc_sdk.connectors.duckdb import DuckDBConnection, sql_quote
 
 OVERTURE_CATALOG_URL = "https://stac.overturemaps.org/catalog.json"
 
 
 def read_json(url: str) -> dict[str, Any]:
-    with urllib.request.urlopen(  # noqa: S310 - fixed HTTPS STAC host
-        url, timeout=30
-    ) as response:
+    with urllib.request.urlopen(url, timeout=30) as response:
         return json.load(response)
 
 
@@ -95,8 +92,7 @@ def main() -> int:
     args = parser().parse_args()
     bounds = tuple(args.bounds)
     if not (
-        -180 <= bounds[0] < bounds[2] <= 180
-        and -90 <= bounds[1] < bounds[3] <= 90
+        -180 <= bounds[0] < bounds[2] <= 180 and -90 <= bounds[1] < bounds[3] <= 90
     ):
         raise SystemExit("bounds must be ordered WGS84 min_lon min_lat max_lon max_lat")
     if args.limit < 1:
@@ -142,7 +138,7 @@ def main() -> int:
             'Overture Maps Foundation' AS overture_source,
             'https://docs.overturemaps.org/attribution/' AS overture_attribution
         FROM read_parquet([{quoted_urls}]) AS p
-        WHERE {' AND '.join(conditions)}
+        WHERE {" AND ".join(conditions)}
         ORDER BY confidence DESC, id
         LIMIT {args.limit}
     """

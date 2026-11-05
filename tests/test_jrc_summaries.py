@@ -1,4 +1,5 @@
 """A canonical no-data row must not crash or turn into a zero in CLI summaries."""
+
 from argparse import Namespace
 from types import SimpleNamespace
 
@@ -27,13 +28,24 @@ def test_null_curve_summary(module, values, tmp_path, monkeypatch, capsys):
                 materialization=SimpleNamespace(source_version="test"),
             )
 
-    monkeypatch.setattr(module, "parse_args", lambda: Namespace(
-        output_dir=tmp_path, dataset="efas", bounds=(0, 0, 1, 1),
-        cache_mode="reuse", h3_resolution=6, years=(1995, 2025), return_periods=[100],
-    ))
+    monkeypatch.setattr(
+        module,
+        "parse_args",
+        lambda: Namespace(
+            output_dir=tmp_path,
+            dataset="efas",
+            bounds=(0, 0, 1, 1),
+            cache_mode="reuse",
+            h3_resolution=6,
+            years=(1995, 2025),
+            return_periods=[100],
+        ),
+    )
     monkeypatch.setattr(module.HazardDataset, "efas", lambda **kwargs: Plan())
     monkeypatch.setattr(module.HazardDataset, "smi", lambda **kwargs: Plan())
-    monkeypatch.setattr(module, "read_hazard_dataset", lambda path: pa.table({"cell_index": [1, 2]}))
+    monkeypatch.setattr(
+        module, "read_hazard_dataset", lambda path: pa.table({"cell_index": [1, 2]})
+    )
     monkeypatch.setattr(module, "curve_quantiles_at", lambda *args: values)
     module.main()
     output = capsys.readouterr().out

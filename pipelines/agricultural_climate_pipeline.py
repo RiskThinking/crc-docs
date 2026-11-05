@@ -232,9 +232,7 @@ def evaluate_hazard(args: argparse.Namespace, agricultural_path: Path) -> Path |
         return None
     columns = pq.read_schema(agricultural_path).names
     passthrough = tuple(
-        name
-        for name in columns
-        if name not in ("asset_id", "cell_index", "geometry")
+        name for name in columns if name not in ("asset_id", "cell_index", "geometry")
     )
     assets = AssetPortfolio(
         agricultural_path,
@@ -264,7 +262,9 @@ def build_map_artifacts(
         if name.startswith("value_")
     ]
     value_projection = ", ".join(f"e.{name}" for name in value_columns)
-    missing_values = " OR ".join(f"e.{name} IS NULL" for name in value_columns) or "true"
+    missing_values = (
+        " OR ".join(f"e.{name} IS NULL" for name in value_columns) or "true"
+    )
     if value_projection:
         value_projection = ", " + value_projection
     weight_column = "pixel_count" if args.source == "usda" else "area_m2"

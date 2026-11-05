@@ -16,7 +16,6 @@ import argparse
 from pathlib import Path
 
 import pyarrow.parquet as pq
-
 from crc_sdk.connectors import read_hazard_dataset
 from crc_sdk.workflows import ExecutionOptions, HazardDataset
 

@@ -14,13 +14,11 @@ picklable, so ``--max-workers`` can stay greater than one.
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-
 import json
+from pathlib import Path
 
 import numpy as np
 import pyarrow.parquet as pq
-
 from crc_sdk.connectors import read_hazard_dataset
 from crc_sdk.impacts import ImpactCalibration, ImpactExpression
 from crc_sdk.workflows import ExecutionOptions, HazardDataset
@@ -107,7 +105,9 @@ def main() -> None:
     metadata = pq.read_schema(impact_path).metadata or {}
     recorded = json.loads(metadata[b"crc.hazard.evaluation"])["impact"]
     if recorded.get("definition_hash") != DEPTH_DAMAGE.definition_hash:
-        raise RuntimeError("impact metadata does not record the curve's definition_hash")
+        raise RuntimeError(
+            "impact metadata does not record the curve's definition_hash"
+        )
     print(f"curve: {DEPTH_DAMAGE.definition_hash}")
 
     raw = pq.read_table(raw_path).to_pandas().set_index("asset_id")
