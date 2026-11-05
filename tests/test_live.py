@@ -156,3 +156,32 @@ def test_which_sites_cdt() -> None:
     for site in table:
         hot = table[site]["hot_days"]
         assert hot["ssp585 2070-2090"] > hot["historic 2010"]
+
+
+def test_will_my_farm_get_drier_pipeline(tmp_path: Path) -> None:
+    from pipelines.will_my_farm_get_drier import main
+
+    summary = main(["--output", str(tmp_path), "--skip-edo", "--skip-cdt"])
+    measures = summary["b_crc_open"]["measures"]
+    assert measures["longest_dry_spell_1_in_10_days"]["change_percent"] > 0
+    assert measures["annual_rain_1_in_10_dry_mm"]["change_percent"] < 0
+
+
+@pytest.mark.skipif(
+    not os.environ.get("RISKTHINKING_API_KEY"), reason="needs a CDT API key"
+)
+def test_will_my_farm_get_drier_cdt() -> None:
+    pytest.importorskip("velo_sdk")
+    from pipelines.will_my_farm_get_drier import cdt_answer
+
+    rain = cdt_answer(41.65, -4.72)["annual_rain"]
+    assert set(rain) == {
+        "historic 2010",
+        "ssp126 2070-2090",
+        "ssp245 2070-2090",
+        "ssp585 2070-2090",
+    }
+    dry = {
+        label: values["annual_rain_1_in_10_dry_mm"] for label, values in rain.items()
+    }
+    assert dry["ssp585 2070-2090"] < dry["historic 2010"]

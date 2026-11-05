@@ -22,6 +22,7 @@ repository discovery; see [platform discovery](ai-playbooks/docs/setup.md#platfo
 | how-hot-will-it-get | [.agents/skills/how-hot-will-it-get/SKILL.md](.agents/skills/how-hot-will-it-get/SKILL.md) |
 | how-hard-will-it-rain | [.agents/skills/how-hard-will-it-rain/SKILL.md](.agents/skills/how-hard-will-it-rain/SKILL.md) |
 | which-sites-are-most-at-risk | [.agents/skills/which-sites-are-most-at-risk/SKILL.md](.agents/skills/which-sites-are-most-at-risk/SKILL.md) |
+| will-my-farm-get-drier | [.agents/skills/will-my-farm-get-drier/SKILL.md](.agents/skills/will-my-farm-get-drier/SKILL.md) |
 
 ## Canonical source and freshness
 
