@@ -21,6 +21,7 @@ repository discovery; see [platform discovery](ai-playbooks/docs/setup.md#platfo
 | compare-crc-velo-assessments | [.agents/skills/compare-crc-velo-assessments/SKILL.md](.agents/skills/compare-crc-velo-assessments/SKILL.md) |
 | how-hot-will-it-get | [.agents/skills/how-hot-will-it-get/SKILL.md](.agents/skills/how-hot-will-it-get/SKILL.md) |
 | how-hard-will-it-rain | [.agents/skills/how-hard-will-it-rain/SKILL.md](.agents/skills/how-hard-will-it-rain/SKILL.md) |
+| which-sites-are-most-at-risk | [.agents/skills/which-sites-are-most-at-risk/SKILL.md](.agents/skills/which-sites-are-most-at-risk/SKILL.md) |
 
 ## Canonical source and freshness
 

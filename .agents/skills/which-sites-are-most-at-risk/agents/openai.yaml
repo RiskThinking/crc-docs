@@ -1,0 +1,4 @@
+interface:
+  display_name: "Which Sites Are Most at Risk?"
+  short_description: "Rank a list of places by how much their climate changes"
+  default_prompt: "Which of my stores is most at risk from climate change?"
