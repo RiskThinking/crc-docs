@@ -1,9 +1,9 @@
 from argparse import Namespace
 from pathlib import Path
 
-import pytest
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 from crc_sdk.connectors.duckdb import DuckDBConnection
 
 from pipelines.agricultural_climate_pipeline import (
@@ -12,7 +12,9 @@ from pipelines.agricultural_climate_pipeline import (
 )
 
 
-@pytest.mark.parametrize("hazard_value,coverage", [(2.0, "modeled_hazard"), (None, "missing_hazard_value")])
+@pytest.mark.parametrize(
+    "hazard_value,coverage", [(2.0, "modeled_hazard"), (None, "missing_hazard_value")]
+)
 def test_ftw_publication_uses_field_schema_and_writes_manifest(
     tmp_path: Path, hazard_value: float | None, coverage: str
 ) -> None:
@@ -89,13 +91,10 @@ def test_ftw_publication_uses_field_schema_and_writes_manifest(
         "area_weighted_value_rp10",
     }
     assert summary["field_units"].to_pylist() == [1, 1]
-    by_coverage = {
-        row["hazard_coverage"]: row for row in summary.to_pylist()
-    }
+    by_coverage = {row["hazard_coverage"]: row for row in summary.to_pylist()}
     assert float(by_coverage[coverage]["observed_field_area_m2"]) == 100.0
     assert (
-        float(by_coverage["outside_modeled_hazard"]["observed_field_area_m2"])
-        == 300.0
+        float(by_coverage["outside_modeled_hazard"]["observed_field_area_m2"]) == 300.0
     )
     assert by_coverage[coverage]["area_weighted_value_rp10"] == hazard_value
     assert by_coverage["outside_modeled_hazard"]["area_weighted_value_rp10"] is None

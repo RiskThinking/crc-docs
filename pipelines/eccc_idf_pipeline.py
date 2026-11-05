@@ -185,18 +185,33 @@ def run(
     )
     rate_schema = pa.schema(
         [(name, pa.string()) for name in ("station", "name", "version", "duration")]
-        + [(name, pa.float64()) for name in (
-            "latitude", "longitude", "published_mm_h", "confidence_95_half_width_mm_h",
-            "fitted_mm_h", "fit_residual_mm_h", "published_duration_depth_mm",
-        )]
-        + [(name, pa.int64()) for name in (
-            "start_year", "end_year", "record_years", "duration_minutes",
-            "return_period_years",
-        )]
+        + [
+            (name, pa.float64())
+            for name in (
+                "latitude",
+                "longitude",
+                "published_mm_h",
+                "confidence_95_half_width_mm_h",
+                "fitted_mm_h",
+                "fit_residual_mm_h",
+                "published_duration_depth_mm",
+            )
+        ]
+        + [
+            (name, pa.int64())
+            for name in (
+                "start_year",
+                "end_year",
+                "record_years",
+                "duration_minutes",
+                "return_period_years",
+            )
+        ]
         + [("beyond_record_length", pa.bool_())]
     )
     pq.write_table(
-        pa.Table.from_pylist(rows, schema=rate_schema), output / "rainfall_rates.parquet"
+        pa.Table.from_pylist(rows, schema=rate_schema),
+        output / "rainfall_rates.parquet",
     )
     comparisons = (
         compare_releases(rows, version, compare_version) if compare_version else []

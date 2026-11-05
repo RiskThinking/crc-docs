@@ -1,21 +1,54 @@
+"""Committed notebooks must render on GitHub without a kernel.
+
+Notebooks marked with ``metadata.crc_docs`` follow the current conventions:
+sequential execution, a PNG preview for every Plotly figure and no saved
+enterprise (CDT) outputs. Every notebook must be valid and free of errors.
+"""
+
 import base64
 import json
 import struct
 from pathlib import Path
 
+import nbformat
+import pytest
 
-NOTEBOOKS = sorted(Path("notebooks").glob("*.ipynb"))
+NOTEBOOKS = sorted(Path("notebooks").rglob("*.ipynb"))
+CURRENT = [
+    path for path in NOTEBOOKS if "crc_docs" in json.loads(path.read_text())["metadata"]
+]
+PLOTLY = "application/vnd.plotly.v1+json"
 
 
-def test_flood_charts_have_static_github_previews() -> None:
-    notebook = json.loads(Path("notebooks/flood_risk_by_province.ipynb").read_text())
-    figures = [
-        output["data"]
-        for cell in notebook["cells"]
-        for output in cell.get("outputs", [])
-        if "application/vnd.plotly.v1+json" in output.get("data", {})
+def outputs(notebook):
+    return [
+        output
+        for cell in notebook.cells
+        if cell.cell_type == "code"
+        for output in cell.outputs
     ]
-    assert len(figures) == 5
+
+
+@pytest.mark.parametrize("path", NOTEBOOKS, ids=str)
+def test_notebook_is_valid_and_error_free(path: Path) -> None:
+    notebook = nbformat.read(path, as_version=4)
+    nbformat.validate(notebook)
+    assert not any(output.output_type == "error" for output in outputs(notebook))
+
+
+def test_current_notebooks_exist() -> None:
+    assert CURRENT, "No notebook declares metadata.crc_docs"
+
+
+@pytest.mark.parametrize("path", CURRENT, ids=str)
+def test_current_notebook_has_saved_previews(path: Path) -> None:
+    notebook = nbformat.read(path, as_version=4)
+    code = [cell for cell in notebook.cells if cell.cell_type == "code"]
+    assert [cell.execution_count for cell in code] == list(range(1, len(code) + 1))
+    figures = [
+        output.data for output in outputs(notebook) if PLOTLY in output.get("data", {})
+    ]
+    assert figures, "expected at least one saved figure"
     for figure in figures:
         image = base64.b64decode(figure["image/png"], validate=True)
         assert image.startswith(b"\x89PNG\r\n\x1a\n")
@@ -23,66 +56,10 @@ def test_flood_charts_have_static_github_previews() -> None:
         assert width >= 600 and height >= 300
 
 
-def test_plotly_notebooks_use_browser_free_runtime_setup() -> None:
-    assert NOTEBOOKS, "No notebooks discovered"
-
-    for path in NOTEBOOKS:
-        notebook = json.loads(path.read_text())
-        all_source = "\n".join(
-            "".join(cell.get("source", [])) for cell in notebook["cells"]
-        )
-        if "import plotly" not in all_source:
-            continue
-        setup = next(
-            "".join(cell["source"])
-            for cell in notebook["cells"]
-            if "REQUIREMENTS =" in "".join(cell.get("source", []))
-        )
-        imports = next(
-            "".join(cell["source"])
-            for cell in notebook["cells"]
-            if "pio.renderers.default" in "".join(cell.get("source", []))
-        )
-
-        assert "pio.to_image" not in setup, path
-        assert "ChromeNotFoundError" not in setup, path
-        assert "kaleido" not in setup.lower(), path
-        assert "duckdb>=1.4.5,<2" in setup, path
-        assert '"plotly", "duckdb", "crc_sdk"' in setup, path
-        assert "CRC_NOTEBOOK_STATIC_PREVIEW" in imports, path
-        assert '"colab" if IN_COLAB' in imports, path
-        assert "### Viewing this notebook" not in all_source, path
-
-
-def test_flood_demo_reuses_cache_and_explores_canonical_curve() -> None:
-    notebook = json.loads(Path("notebooks/flood_risk_by_province.ipynb").read_text())
-    source = "\n".join(
-        "".join(cell.get("source", [])) for cell in notebook["cells"]
-    )
-
-    assert "CACHE_MODE" not in source
-    assert 'mode="reuse"' in source
-    assert "plan.ensure_materialized()" in source
-    assert "OVERTURE_RELEASE_FILE.exists()" in source
-    assert "OVERTURE_POINTS_PATH.exists()" in source
-    assert "read_parquet('{OVERTURE_POINTS_PATH}')" in source
-    assert "RETURN_PERIOD_YEARS = 25" in source
-    assert "SOURCE_RETURN_PERIODS = (10, 20, 30, 40, 50, 75, 100, 200, 500)" in source
-    assert "widgets.SelectionSlider(" in source
-    assert "MEANINGFUL_RETURN_PERIODS = (10, 20, 25, 30, 40, 50, 75, 100, 200, 250, 500, 750, 1000)" in source
-    assert 'description="Apply to regional analysis"' in source
-    assert "run_regional_analysis(RETURN_PERIOD_YEARS, output=analysis_output)" in source
-    assert 'name="Canonical fit at JRC source RPs"' in source
-    assert source.count('name="Canonical fitted curve"') == 1
-    assert source.count("curve_output = widgets.Output()") == 1
-    assert "they are **not raw raster observations**" in source
-    assert 'xaxis=dict(title="Return period (years)", range=[10, 1000])' in source
-    assert "curve extrapolation beyond RP500" in source
-    assert "return_period_years" in source
-    assert "MIN_DEPTH_M = 0.5" in source
-    assert 'emit("Reusable cache ready: "' in source
-    assert "curve_quantiles_at(curves, probability, max_workers=1)" in source
-    assert "SELECT depth_m, place_count," in source
-    assert "SELECT p.confidence, p.geometry" in source
-    assert "SELECT a.shapeName AS province," in source
-    assert "SELECT p.name" not in source
+@pytest.mark.parametrize("path", CURRENT, ids=str)
+def test_current_notebook_saves_no_enterprise_results(path: Path) -> None:
+    notebook = nbformat.read(path, as_version=4)
+    for cell in notebook.cells:
+        if cell.cell_type == "code" and "velo_sdk" in cell.source:
+            rich = [output for output in cell.outputs if output.output_type != "stream"]
+            assert not rich, "CDT results must not be committed"

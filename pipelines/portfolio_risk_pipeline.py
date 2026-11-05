@@ -18,7 +18,6 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-
 from crc_framework import (
     PiecewiseLinearImpact,
     ScenarioMetadata,
@@ -78,8 +77,9 @@ def match_assets_to_hazard(
     con = DuckDBConnection.for_analytics(
         work_dir, extensions=("spatial", "h3")
     ).connect()
-    return con.execute(
-        f"""
+    return (
+        con.execute(
+            f"""
         SELECT a.asset_id, a.sector, a.replacement_value,
                a.longitude, a.latitude, h.*
         FROM read_parquet({sql_quote(str(assets_path))}) a
@@ -94,7 +94,10 @@ def match_assets_to_hazard(
           AND h.horizon = {HORIZON}
           AND h.pathway = {sql_quote(PATHWAY)}
         """
-    ).arrow().read_all()
+        )
+        .arrow()
+        .read_all()
+    )
 
 
 def main() -> None:

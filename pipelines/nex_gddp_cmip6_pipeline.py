@@ -43,6 +43,8 @@ def run(output: Path, year: int = 2014) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--year", type=int, default=2014)
-    parser.add_argument("--output", type=Path, default=Path("pipeline_output/nex_gddp_cmip6"))
+    parser.add_argument(
+        "--output", type=Path, default=Path("pipeline_output/nex_gddp_cmip6")
+    )
     args = parser.parse_args()
     print(f"Wrote {run(args.output, args.year)} grid cells")

@@ -16,3 +16,16 @@ dependencies = [
 velo = [
     "velo-sdk==0.0.20",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.16",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+extend-exclude = ["notebooks"]

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Weekly, so upstream data or package changes surface without a commit.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint and offline tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Install locked environment
+        run: uv sync --locked
+
+      - name: Lint
+        run: |
+          uv run ruff check pipelines tests
+          uv run ruff format --check pipelines tests
+
+      - name: Offline tests (saved notebook outputs, pipelines)
+        run: uv run pytest -q
+
+  live:
+    name: Execute notebooks and pipelines on live data
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Install locked environment
+        run: uv sync --locked
+
+      - name: Install Chrome for static chart previews
+        run: uv run plotly_get_chrome -y
+
+      - name: Restore downloaded data
+        uses: actions/cache@v4
+        with:
+          path: |
+            notebooks/data
+            ~/.cache/crc-sdk
+          key: live-data-${{ hashFiles('notebooks/**/*.ipynb', 'pipelines/**/*.py', 'uv.lock') }}
+          restore-keys: live-data-
+
+      - name: Execute notebooks and pipelines (small CI configuration)
+        env:
+          CRC_DOCS_LIVE: "1"
+          CRC_DOCS_EXECUTED_DIR: ${{ runner.temp }}/executed
+        run: uv run pytest -q tests/test_live.py
+
+      - name: Upload executed notebooks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: executed-notebooks
+          path: ${{ runner.temp }}/executed
+          if-no-files-found: ignore

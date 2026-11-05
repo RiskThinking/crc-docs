@@ -29,9 +29,7 @@ def parser() -> argparse.ArgumentParser:
         default=(-79.65, 43.58, -79.15, 43.85),
         metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
     )
-    p.add_argument(
-        "--return-periods", type=int, nargs="+", default=[10, 50, 100, 500]
-    )
+    p.add_argument("--return-periods", type=int, nargs="+", default=[10, 50, 100, 500])
     p.add_argument(
         "--dataset",
         choices=("efas", "glofas"),

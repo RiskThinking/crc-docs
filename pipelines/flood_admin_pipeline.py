@@ -16,7 +16,6 @@ import urllib.request
 from pathlib import Path
 
 import pyarrow as pa
-
 from crc_sdk.connectors import read_hazard_dataset
 from crc_sdk.connectors.duckdb import DuckDBConnection, sql_quote
 from crc_sdk.geometry import (
