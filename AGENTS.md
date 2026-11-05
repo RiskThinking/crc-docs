@@ -19,6 +19,7 @@ repository discovery; see [platform discovery](ai-playbooks/docs/setup.md#platfo
 | velo-triage-portfolio-insurability | [.agents/skills/velo-triage-portfolio-insurability/SKILL.md](.agents/skills/velo-triage-portfolio-insurability/SKILL.md) |
 | velo-assess-company-climate-risk | [.agents/skills/velo-assess-company-climate-risk/SKILL.md](.agents/skills/velo-assess-company-climate-risk/SKILL.md) |
 | compare-crc-velo-assessments | [.agents/skills/compare-crc-velo-assessments/SKILL.md](.agents/skills/compare-crc-velo-assessments/SKILL.md) |
+| how-hot-will-it-get | [.agents/skills/how-hot-will-it-get/SKILL.md](.agents/skills/how-hot-will-it-get/SKILL.md) |
 
 ## Canonical source and freshness
 

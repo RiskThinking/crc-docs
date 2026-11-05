@@ -1,0 +1,4 @@
+interface:
+  display_name: "How Hot Will It Get?"
+  short_description: "Today's and future hottest days for any place"
+  default_prompt: "How hot will the hottest day get in my city in the future?"
