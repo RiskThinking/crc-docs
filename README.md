@@ -42,7 +42,8 @@ New to return periods and risk curves? Start with the five-minute primer:
 | Future, 2025–2100 | ❌ | ✅ | ✅ |
 | Emissions pathways | ❌ | SSP5-8.5 ([others on request](mailto:opensource@riskthinking.ai)) | All, plus warming levels |
 | Hazards | One per source | 63, same format | 63, same format |
-| Impact functions, entities (e.g. companies and assets) | ❌ | Bring your own | ✅ |
+| Financial impact | ❌ | CRC generic impact functions or bring your own | Built-in & industry-validated |
+| Companies and assets | ❌ | ❌ | ✅ |
 | Cost | Free | Free for non-commercial use (CC BY-NC 4.0) | [Trial](https://velo.riskthinking.ai/cdt-express), then licence |
 
 ## Appendix: data-source notebooks
