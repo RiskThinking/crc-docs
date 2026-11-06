@@ -1,58 +1,59 @@
-# Agent entry point
+# Agent guide
 
-Canonical skill definitions live under [`.agents/skills/`](.agents/skills), one
-`SKILL.md` per skill. This file exists so agentic tools that auto-read
-`AGENTS.md` (Codex, Cursor, Aider, Amp, and similar) discover the skills
-without any manual linking step. Claude Code loads this file through
-`@AGENTS.md` in the root [`CLAUDE.md`](CLAUDE.md). claude.ai has no automatic
-repository discovery; see [platform discovery](ai-playbooks/docs/setup.md#platform-discovery).
+crc-docs answers everyday climate-risk questions three ways: free public data,
+CRC Open and CDT (Riskthinking.AI's Climate Digital Twin). Each question has a
+skill, a notebook and a pipeline. Claude Code loads this file through
+`@AGENTS.md` in [CLAUDE.md](CLAUDE.md); other agentic tools read it directly.
+A short index for language models is in [llms.txt](llms.txt).
 
 ## Skills
 
-| Skill | Definition |
+One `SKILL.md` per question under [`.agents/skills/`](.agents/skills):
+
+| Question | Skill |
 |---|---|
-| crc-screen-mortgage-flood | [.agents/skills/crc-screen-mortgage-flood/SKILL.md](.agents/skills/crc-screen-mortgage-flood/SKILL.md) |
-| crc-model-flood-insurance-loss | [.agents/skills/crc-model-flood-insurance-loss/SKILL.md](.agents/skills/crc-model-flood-insurance-loss/SKILL.md) |
-| crc-assess-asset-portfolio-risk | [.agents/skills/crc-assess-asset-portfolio-risk/SKILL.md](.agents/skills/crc-assess-asset-portfolio-risk/SKILL.md) |
-| crc-assess-agricultural-climate-risk | [.agents/skills/crc-assess-agricultural-climate-risk/SKILL.md](.agents/skills/crc-assess-agricultural-climate-risk/SKILL.md) |
-| velo-underwrite-property-climate | [.agents/skills/velo-underwrite-property-climate/SKILL.md](.agents/skills/velo-underwrite-property-climate/SKILL.md) |
-| velo-triage-portfolio-insurability | [.agents/skills/velo-triage-portfolio-insurability/SKILL.md](.agents/skills/velo-triage-portfolio-insurability/SKILL.md) |
-| velo-assess-company-climate-risk | [.agents/skills/velo-assess-company-climate-risk/SKILL.md](.agents/skills/velo-assess-company-climate-risk/SKILL.md) |
-| compare-crc-velo-assessments | [.agents/skills/compare-crc-velo-assessments/SKILL.md](.agents/skills/compare-crc-velo-assessments/SKILL.md) |
-| how-hot-will-it-get | [.agents/skills/how-hot-will-it-get/SKILL.md](.agents/skills/how-hot-will-it-get/SKILL.md) |
-| how-hard-will-it-rain | [.agents/skills/how-hard-will-it-rain/SKILL.md](.agents/skills/how-hard-will-it-rain/SKILL.md) |
-| which-sites-are-most-at-risk | [.agents/skills/which-sites-are-most-at-risk/SKILL.md](.agents/skills/which-sites-are-most-at-risk/SKILL.md) |
-| will-my-farm-get-drier | [.agents/skills/will-my-farm-get-drier/SKILL.md](.agents/skills/will-my-farm-get-drier/SKILL.md) |
+| How hot will the hottest day get? | [how-hot-will-it-get](.agents/skills/how-hot-will-it-get/SKILL.md) |
+| How hard will it rain? | [how-hard-will-it-rain](.agents/skills/how-hard-will-it-rain/SKILL.md) |
+| Which of my sites are most at risk? | [which-sites-are-most-at-risk](.agents/skills/which-sites-are-most-at-risk/SKILL.md) |
+| Will my farm get drier? | [will-my-farm-get-drier](.agents/skills/will-my-farm-get-drier/SKILL.md) |
+| How exposed is this company? | [how-exposed-is-this-company](.agents/skills/how-exposed-is-this-company/SKILL.md) |
 
-## Canonical source and freshness
+Each skill picks its data route in this order unless the person names one:
+CDT through the CDT Express MCP server ([`.mcp.json`](.mcp.json),
+`https://mcp.riskthinking.ai/mcp`), then CRC Open through the matching pipeline,
+then the Colab notebook. Hosts without repository access can fetch a skill from
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/<name>/SKILL.md`.
+CI also packages every skill as an uploadable zip (`tools/package_skills.py`).
 
-Follow the selected skill's refresh bootstrap before an assessment. Resolve
-`RiskThinking/crc-docs` once and use its skill, references and scripts from the
-same commit; see [the refresh contract](ai-playbooks/docs/skill-refresh.md).
-Explicit user pins and local development requests take precedence. Never replace
-local edits or claim an installed copy is current without verifying the source.
+## Layout
 
-## Invoking a skill
+- `notebooks/<question>.ipynb`: the explained answer, A → B → C, with saved
+  chart previews. `notebooks/climate_risk_curves_primer.ipynb` teaches the
+  concepts.
+- `notebooks/sources/`: tours of individual public data sources.
+- `pipelines/<question>.py`: the headless answer; writes `summary.json`.
+  Other files in `pipelines/` back the source notebooks.
+- `tests/`: offline checks, plus live runs behind `CRC_DOCS_LIVE=1`.
 
-Say the skill by name in plain language — e.g. "Use the
-crc-screen-mortgage-flood skill for Toronto, Canada." Every skill accepts
-this. Platform selectors are equivalent shortcuts, not requirements: Codex
-`$skill-name`, ChatGPT `@skill-name`, Claude Code `/skill-name`.
+## Checks
 
-## If this repository is not mounted or linked in your tool
-
-Some chat surfaces (e.g. a bare "refer to this GitHub URL" prompt with no
-repository connector) cannot read files just because a URL was mentioned. If
-your tool has any URL-fetch or browsing capability, fetch the raw skill file
-directly and follow it as your operating instructions for the rest of the
-conversation:
-
-```
-https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/<skill-name>/SKILL.md
+```sh
+uv sync --locked --extra velo
+uv run pytest -q
+uv run ruff check pipelines tests tools && uv run ruff format --check pipelines tests tools
+CRC_DOCS_LIVE=1 uv run pytest -q tests/test_live.py   # downloads data
 ```
 
-For enterprise (VELO/CDT) skills, also connect the CDT Express MCP server at
-`https://mcp.riskthinking.ai/mcp` — see [`.mcp.json`](.mcp.json) and README.md.
+## Rules
 
-See [README.md](README.md) for the problem-to-code map and
-[setup](ai-playbooks/docs/setup.md) for enterprise MCP and platform discovery.
+- Notebooks keep sequential execution counts and a PNG preview for every chart.
+  Set `CRC_DOCS_CI=1` for small runs and `CRC_NOTEBOOK_STATIC_PREVIEW=1` to save
+  previews. `metadata.crc_docs` controls CI (`ci`, `timeout_seconds`,
+  `cdt_outputs`).
+- Saved CDT outputs stay small and aggregated. Never commit API keys; CDT code
+  reads `RISKTHINKING_API_KEY`.
+- CDT REST takes the singular `risk_factor` parameter; MCP tools take arrays.
+- CRC Open has no historical baseline and covers SSP5-8.5; say so wherever its
+  results appear.
+- Write outputs atomically (temporary file, then `os.replace`).
+- Docs, code and commit messages are in English.

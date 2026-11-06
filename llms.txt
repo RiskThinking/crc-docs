@@ -1,0 +1,24 @@
+# Climate Risk Commons docs (crc-docs)
+
+> Everyday climate-risk questions answered three ways: free public data, CRC Open (free pre-fitted climate curves, 63 hazards, SSP5-8.5, CC BY-NC 4.0) and Riskthinking.AI's Climate Digital Twin (CDT, licensed; every pathway, historical baseline, impacts, company and index data). Each question has an AI skill, a notebook and a headless pipeline.
+
+Conventions: return period RP means a value with probability 1/RP of being reached in any year (non-exceedance p = 1 - 1/RP). Future values are averaged over several horizons because single horizons are noisy. CRC Open has no historical baseline; CDT's baseline is pathway "historic", horizon 2010. CDT REST uses the singular `risk_factor` parameter; MCP tools use `risk_factors`. CDT Express MCP server: https://mcp.riskthinking.ai/mcp.
+
+## Questions
+
+- [How hot will the hottest day get?](.agents/skills/how-hot-will-it-get/SKILL.md): tx_max; NOAA GHCNh station vs CRC Open vs CDT. Notebook: notebooks/how_hot_will_it_get.ipynb. Pipeline: pipelines/how_hot_will_it_get.py
+- [How hard will it rain?](.agents/skills/how-hard-will-it-rain/SKILL.md): rx1day; ERA5 vs CRC Open vs CDT. Notebook: notebooks/how_hard_will_it_rain.ipynb. Pipeline: pipelines/how_hard_will_it_rain.py
+- [Which of my sites are most at risk?](.agents/skills/which-sites-are-most-at-risk/SKILL.md): tx_max, rx1day, hot_days, fwi for a site list. Notebook: notebooks/which_sites_are_most_at_risk.ipynb. Pipeline: pipelines/which_sites_are_most_at_risk.py
+- [Will my farm get drier?](.agents/skills/will-my-farm-get-drier/SKILL.md): prcptot, dry_days, max_consecutive_dry_days; JRC EDO vs CRC Open vs CDT. Notebook: notebooks/will_my_farm_get_drier.ipynb. Pipeline: pipelines/will_my_farm_get_drier.py
+- [How exposed is this company?](.agents/skills/how-exposed-is-this-company/SKILL.md): Overture places and IBTrACS hurricanes vs CRC Open with crc-framework damage functions (cyclone, rx1day, hot_days) vs CDT company scores and index ranking. Notebook: notebooks/how_exposed_is_this_company.ipynb. Pipeline: pipelines/how_exposed_is_this_company.py
+
+## Learn
+
+- [Climate risk curves in five minutes](notebooks/climate_risk_curves_primer.ipynb): reading return-period curves, sampling uncertainty, lifetime chance, one recipe for many hazards
+
+## Optional
+
+- [Data-source notebooks](notebooks/sources/): ERA5, NOAA, JRC, CMIP6, ECCC, USGS, HYDAT, CHIRPS, IBTrACS, cropland, admin boundaries
+- [crc-sdk docs](https://github.com/RiskThinking/crc-sdk/blob/main/docs/README.md)
+- [CDT Express MCP](https://github.com/RiskThinking/cdt-express-mcp)
+- Contacts: more CRC Open data, opensource@riskthinking.ai; research access, academic@riskthinking.ai; CDT trial, https://velo.riskthinking.ai/cdt-express
