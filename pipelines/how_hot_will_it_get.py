@@ -48,7 +48,7 @@ CDT_PATHWAYS = (
     ("ssp245", 2050),
     ("ssp585", 2050),
 )
-SALES = "mailto:sales@riskthinking.ai"
+MORE_DATA = "mailto:opensource@riskthinking.ai"
 TRIAL = "https://velo.riskthinking.ai/cdt-express"
 KELVIN = 273.15
 
@@ -206,7 +206,7 @@ def crc_open_answer(
             for horizon, curve in sorted(curves.items())
         },
         "licence": metadata.get("licence") or "CC-BY-NC-4.0",
-        "other_pathways": f"Contact sales: {SALES}",
+        "other_pathways": f"Ask the open-source team: {MORE_DATA}",
     }
 
 
@@ -217,7 +217,6 @@ def cdt_answer(latitude: float, longitude: float) -> dict[str, Any]:
             "available": False,
             "reason": "RISKTHINKING_API_KEY not set",
             "trial": TRIAL,
-            "sales": SALES,
         }
     from velo_sdk.api import APIClient
 

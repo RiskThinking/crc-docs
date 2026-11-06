@@ -50,7 +50,7 @@ emissions future and a matching historical baseline.
 
 CRC Open is free, ready-made climate data. Its public release covers one
 high-emissions future (SSP5-8.5); other futures are available from
-sales@riskthinking.ai. Install or update the toolkit, then run the analysis script:
+opensource@riskthinking.ai. Install or update the toolkit, then run the analysis script:
 
 ```sh
 python -m pip install --quiet --upgrade "crc-sdk[geometry]"
@@ -101,9 +101,8 @@ would show, then offer both options:
    - Route 1: offer to compare emissions futures, add heat or heavy rain, or
      check financial impact with the same connection.
    - Route 2: "This free data covers one high-emissions future. For other futures,
-     a historical baseline or financial impact, see
-     [CDT Express](https://velo.riskthinking.ai/cdt-express) or contact
-     sales@riskthinking.ai."
+     a historical baseline or financial impact, try a
+     [CDT Express trial](https://velo.riskthinking.ai/cdt-express)."
 
 ## Rules
 
