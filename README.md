@@ -6,7 +6,10 @@ Answers to everyday climate-risk questions, three ways each: with free public
 data, with **CRC Open** (free, ready-made climate curves for 63 hazards
 worldwide), and with Riskthinking.AI's **Climate Digital Twin (CDT)**. Every
 answer comes as an AI skill you can ask in one sentence, a notebook that
-explains it, and a pipeline that runs it.
+explains it, and a pipeline that runs it. The open toolkit
+[crc-sdk](https://github.com/RiskThinking/crc-sdk) puts free public data into
+the same curve format as CRC Open, so your own data, CRC Open and CDT can be
+compared like for like.
 
 ## Pick a question
 
@@ -50,7 +53,7 @@ New to return periods and risk curves? Start with the five-minute primer:
 | Past | ✅ | ➖ | ✅ modelled baseline |
 | Future, 2025–2100 | ❌ | ✅ | ✅ |
 | Emissions pathways | ❌ | SSP5-8.5 ([others on request](mailto:opensource@riskthinking.ai)) | All, plus warming levels |
-| Hazards | One per source | 63, same format | 63, same format |
+| Hazards | Any source, in the same format through crc-sdk | 63, same format | 63, same format |
 | Financial impact | ❌ | CRC generic impact functions or bring your own | Built-in & industry-validated |
 | Companies and assets | ❌ | ❌ | ✅ |
 | Cost | Free | Free for non-commercial use (CC BY-NC 4.0) | [Trial](https://velo.riskthinking.ai/cdt-express), then licence |
@@ -60,7 +63,21 @@ New to return periods and risk curves? Start with the five-minute primer:
 Hands-on tours of individual public sources through crc-sdk (ERA5, NOAA
 stations, JRC flood and drought, CMIP6, ECCC, USGS, HYDAT, CHIRPS, IBTrACS, NOAA
 sea level and water levels, USDA and Fields of The World cropland, and flood
-risk by province) are in [notebooks/sources](notebooks/sources/).
+risk by province) are in [notebooks/sources](notebooks/sources/). Even with
+free data alone, crc-sdk does the heavy lifting:
+
+- **One format for every source.** Station readings, reanalysis grids, flood
+  maps and your own rasters or tables become the same fitted curve per hexagon
+  as CRC Open, with units and meaning attached. The same ranking, damage and
+  portfolio code then runs on any of them.
+- **Traceable.** Every dataset records its source, licence, attribution,
+  retrieval time and checksum, ready for an audit or a disclosure report.
+- **Light.** It downloads only the area you ask for, checks and caches it, and
+  shows its plan before downloading anything.
+
+In practice that lets you check CRC Open or CDT against local measurements,
+fill a region or hazard with data you trust, and switch sources without
+rewriting the analysis.
 
 ## Packages
 
