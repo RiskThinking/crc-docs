@@ -24,11 +24,20 @@ New to return periods and risk curves? Start with the five-minute primer:
 
 ## Three ways in
 
-- **Ask an AI assistant.** Install a skill (or paste its link) in Claude, ChatGPT
-  or a coding agent and ask the one-sentence question. The skill uses CDT when
-  the [CDT Express connector](https://github.com/RiskThinking/cdt-express-mcp) is
+- **Ask an AI assistant.** Paste this into Claude, ChatGPT or a coding agent,
+  with your own question at the end:
+
+  ```text
+  Using the matching skill from https://github.com/RiskThinking/crc-docs
+  answer: How exposed is Walmart to climate change?
+  ```
+
+  The skill uses CDT when the
+  [CDT Express connector](https://github.com/RiskThinking/cdt-express-mcp) is
   available, otherwise CRC Open through Python, otherwise it points you to the
-  notebook. Say "use CRC Open" or "use CDT" to steer explicitly.
+  notebook. Say "use CRC Open" or "use CDT" to steer explicitly. To keep a skill
+  installed, add its folder from [`.agents/skills`](.agents/skills/) to your
+  assistant.
 - **Open a notebook.** If opened in Colab, choose **Runtime → Run all**. No
   account is needed for the free parts. Saved charts are visible on GitHub.
 - **Run a pipeline.** Clone this repo, `uv sync --locked`, then `uv run python pipelines/<name>.py --help`.
