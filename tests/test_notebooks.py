@@ -7,6 +7,7 @@ enterprise (CDT) outputs. Every notebook must be valid and free of errors.
 
 import base64
 import json
+import re
 import struct
 from pathlib import Path
 
@@ -70,3 +71,13 @@ def test_current_notebook_keeps_enterprise_results_small(path: Path) -> None:
         if expects_results:
             rich = [output for output in cell.outputs if output.output_type != "stream"]
             assert rich, "re-run with a CDT key before committing (cdt_outputs)"
+
+
+@pytest.mark.parametrize("path", NOTEBOOKS, ids=str)
+def test_notebook_never_pins_old_packages(path: Path) -> None:
+    # A pinned install inside a kernel would replace the locked environment
+    # for every notebook that runs after it.
+    notebook = nbformat.read(path, as_version=4)
+    for cell in notebook.cells:
+        if cell.cell_type == "code":
+            assert not re.search(r"crc-(sdk|framework)[\[\]\w,]*==", cell.source)
