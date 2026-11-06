@@ -277,13 +277,17 @@ def expected_damage(
 
 
 def crc_open_answer(
-    locations: pa.Table, bounds: tuple[float, float, float, float], cache: Path
+    locations: pa.Table,
+    bounds: tuple[float, float, float, float],
+    cache: Path,
+    country: str = "USA",
+    continent: str = "North America",
 ) -> dict[str, Any]:
     """Average expected yearly damage per location over early and late windows."""
     assets = locations.select(["asset_id", "longitude", "latitude"])
     n = assets.num_rows
-    assets = assets.append_column("country", pa.array(["USA"] * n))
-    assets = assets.append_column("continent", pa.array(["North America"] * n))
+    assets = assets.append_column("country", pa.array([country] * n))
+    assets = assets.append_column("continent", pa.array([continent] * n))
     assets = assets.append_column("building_type", pa.array(["commercial"] * n))
     ids = assets.column("asset_id").to_pylist()
     per_hazard: dict[str, dict[str, list[float]]] = {}
@@ -315,7 +319,7 @@ def crc_open_answer(
         "available": True,
         "pathway": "ssp585",
         "windows": {"early": list(EARLY), "late": list(LATE)},
-        "assumptions": "commercial building in the USA; equal value per location",
+        "assumptions": f"commercial building in {country}; equal value per location",
         "average_expected_damage_pct": {
             "total": {w: pct(total[w]) for w in total},
             **{h: {w: pct(per_hazard[h][w]) for w in total} for h in HAZARDS},
@@ -465,6 +469,14 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         action="append",
         help="Keep this Overture basic_category (repeatable), e.g. superstore",
     )
+    parser.add_argument(
+        "--country",
+        default="USA",
+        help="ISO 3166-1 alpha-3 country of the area, for damage functions",
+    )
+    parser.add_argument(
+        "--continent", default="North America", help="Continent of the area"
+    )
     parser.add_argument("--company", help="Company name in CDT (default: --brand)")
     parser.add_argument("--index", default="Dow Jones Industrial Average")
     parser.add_argument("--since", type=int, default=1990)
@@ -492,7 +504,9 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     if places["available"]:
         if not args.skip_hurricanes:
             storms = hurricane_answer(places["table"], bounds, args.since, cache)
-        crc = crc_open_answer(places["table"], bounds, cache)
+        crc = crc_open_answer(
+            places["table"], bounds, cache, args.country, args.continent
+        )
     cdt = (
         {"available": False, "reason": "skipped"}
         if args.skip_cdt
