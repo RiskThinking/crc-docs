@@ -1,0 +1,4 @@
+interface:
+  display_name: "How Exposed Is This Company?"
+  short_description: "Physical climate risk of a listed company, and how it compares"
+  default_prompt: "How exposed is Walmart to climate change?"
