@@ -64,7 +64,9 @@ heavy rain and hot days with open damage functions.
 
 Pick an area: the one the person asks about, otherwise the company's home state
 or region. Work out its bounding box (`min_lon min_lat max_lon max_lat`) and
-two-letter region code yourself and show them. Then install or update the
+two-letter region code yourself and show them. Outside the USA, also pass
+`--country` (three-letter code, e.g. `CAN`) and `--continent` (e.g. `Europe`)
+so the damage functions match. Then install or update the
 toolkit and run the script:
 
 ```sh
