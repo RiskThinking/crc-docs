@@ -185,3 +185,33 @@ def test_will_my_farm_get_drier_cdt() -> None:
         label: values["annual_rain_1_in_10_dry_mm"] for label, values in rain.items()
     }
     assert dry["ssp585 2070-2090"] < dry["historic 2010"]
+
+
+def test_how_exposed_pipeline(tmp_path: Path) -> None:
+    from pipelines.how_exposed_is_this_company import main
+
+    tampa_bay = ["-82.9", "27.6", "-82.2", "28.3"]
+    summary = main(
+        ["--output", str(tmp_path), "--bounds", *tampa_bay, "--region", "FL"]
+        + ["--skip-cdt"]
+    )
+    assert summary["a_public"]["locations"]["count"] > 10
+    assert 0 < summary["a_public"]["hurricanes"]["share_with_any"] <= 1
+    damage = summary["b_crc_open"]["average_expected_damage_pct"]
+    assert damage["hot_days"]["late"] > damage["hot_days"]["early"]
+    assert (tmp_path / "locations.csv").read_text().count("\n") > 10
+
+
+@pytest.mark.skipif(
+    not os.environ.get("RISKTHINKING_API_KEY"), reason="needs a CDT API key"
+)
+def test_how_exposed_cdt() -> None:
+    pytest.importorskip("velo_sdk")
+    from pipelines.how_exposed_is_this_company import cdt_answer
+
+    result = cdt_answer("Walmart", "Dow Jones Industrial Average")
+    assert set(result["scores"]) == {
+        f"{p} {h}" for p in ("ssp245", "ssp585") for h in ("2030", "2050", "2090")
+    }
+    assert len(result["index_ranking_ssp585_2050"]) == 30
+    assert result["rank"] is not None

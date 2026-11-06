@@ -11,6 +11,7 @@ def test_question_skills_bundle_their_pipeline(tmp_path: Path) -> None:
         ("how-hard-will-it-rain", "how_hard_will_it_rain.py"),
         ("which-sites-are-most-at-risk", "which_sites_are_most_at_risk.py"),
         ("will-my-farm-get-drier", "will_my_farm_get_drier.py"),
+        ("how-exposed-is-this-company", "how_exposed_is_this_company.py"),
     ]:
         names = zipfile.ZipFile(tmp_path / f"{skill}.zip").namelist()
         assert f"{skill}/SKILL.md" in names
