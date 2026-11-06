@@ -55,7 +55,7 @@ each pathway.
 
 CRC Open is free, ready-made climate data. Its public release covers one
 high-emissions future (SSP5-8.5); other futures are available from
-sales@riskthinking.ai. Write the sites to `sites.csv` with the header
+opensource@riskthinking.ai. Write the sites to `sites.csv` with the header
 `site,latitude,longitude`, install or update the toolkit, then run the script:
 
 ```sh
@@ -109,9 +109,8 @@ would show, then offer both options:
    - Route 1: offer to compare emissions futures, add more hazards, or estimate
      financial impact on the buildings with the same connection.
    - Route 2: "This free data covers one high-emissions future. For other futures,
-     a historical baseline or financial impact, see
-     [CDT Express](https://velo.riskthinking.ai/cdt-express) or contact
-     sales@riskthinking.ai."
+     a historical baseline or financial impact, try a
+     [CDT Express trial](https://velo.riskthinking.ai/cdt-express)."
 
 ## Rules
 

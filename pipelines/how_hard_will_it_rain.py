@@ -51,7 +51,7 @@ WINDOWS = {
 }
 CDT_PATHWAYS = ("ssp126", "ssp245", "ssp585")
 CDT_LATE_HORIZONS = (2070, 2080, 2090)
-SALES = "mailto:sales@riskthinking.ai"
+MORE_DATA = "mailto:opensource@riskthinking.ai"
 TRIAL = "https://velo.riskthinking.ai/cdt-express"
 RP_GRID = np.geomspace(1.2, 100, 200)
 
@@ -188,7 +188,7 @@ def crc_open_answer(
             for name, levels in windows.items()
         },
         "licence": metadata.get("licence") or "CC-BY-NC-4.0",
-        "other_pathways": f"Contact sales: {SALES}",
+        "other_pathways": f"Ask the open-source team: {MORE_DATA}",
     }
 
 
@@ -199,7 +199,6 @@ def cdt_answer(latitude: float, longitude: float) -> dict[str, Any]:
             "available": False,
             "reason": "RISKTHINKING_API_KEY not set",
             "trial": TRIAL,
-            "sales": SALES,
         }
     from velo_sdk.api import APIClient
 
