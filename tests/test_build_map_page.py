@@ -75,10 +75,10 @@ def test_link_round_trips_every_numeric_field():
         "name": "Target",
         "city": "Miami",
         "hurricanes_within_50km_since_1990": 3,
-        "cyclone_early": 0.12344,
-        "hot_days_late": 0.8,
-        "total_early": 0.5,
-        "total_late": 1.4,
+        "storm_damage_2025_2035": 0.12344,
+        "hot_weather_damage_2070_2080": 0.8,
+        "total_damage_2025_2035": 0.5,
+        "total_damage_2070_2080": 1.4,
     }
     geojson = {
         "features": [
@@ -93,10 +93,10 @@ def test_link_round_trips_every_numeric_field():
     pack = decode_link(link)
     assert pack["k"] == [
         "hurricanes_within_50km_since_1990",
-        "cyclone_early",
-        "hot_days_late",
-        "total_early",
-        "total_late",
+        "storm_damage_2025_2035",
+        "hot_weather_damage_2070_2080",
+        "total_damage_2025_2035",
+        "total_damage_2070_2080",
     ]
     assert pack["r"] == [[-80.123, 26.5, "Miami", 3, 0.1234, 0.8, 0.5, 1.4]]
 

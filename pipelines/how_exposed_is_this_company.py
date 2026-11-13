@@ -56,6 +56,27 @@ HAZARDS = {
     "hot_days": "hot days",
 }
 EARLY, LATE = (2025, 2030, 2035), (2070, 2075, 2080)
+# Per-location property names on the map. They carry the years but no unit (the
+# map declares the unit, % of building value per year, in crc-viz's fieldInfo),
+# and avoid hazard words such as "cyclone" or "rain": crc-viz reads those as a
+# hazard measurement and shows its unit (m/s, mm).
+PROPERTY_HAZARDS = {
+    "cyclone": "storm",
+    "rx1day": "downpour",
+    "hot_days": "hot_weather",
+    "total": "total",
+}
+PROPERTY_WINDOWS = {
+    "early": f"{EARLY[0]}_{EARLY[-1]}",
+    "late": f"{LATE[0]}_{LATE[-1]}",
+}
+
+
+def damage_property(hazard: str, window: str) -> str:
+    """Map property for one hazard (or "total") and window, e.g. total_damage_2070_2080."""
+    return f"{PROPERTY_HAZARDS[hazard]}_damage_{PROPERTY_WINDOWS[window]}"
+
+
 # Midpoints of 200 equal probability slices; the mean over them is the
 # expected (average-year) damage. Values beyond 1-in-400 are left out.
 PROBABILITIES = (np.arange(200) + 0.5) / 200
@@ -329,11 +350,14 @@ def crc_open_answer(
         "per_location_pct": {
             a: {
                 **{
-                    f"{h}_{w}": round(100 * per_hazard[h][w][i], 3)
+                    damage_property(h, w): round(100 * per_hazard[h][w][i], 3)
                     for h in HAZARDS
                     for w in total
                 },
-                **{f"total_{w}": round(100 * total[w][i], 3) for w in total},
+                **{
+                    damage_property("total", w): round(100 * total[w][i], 3)
+                    for w in total
+                },
             }
             for i, a in enumerate(ids)
         },

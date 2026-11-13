@@ -35,7 +35,14 @@ BUNDLE_URL = "https://raw.githubusercontent.com/RiskThinking/crc-docs/map-skill-
 BUNDLE_FILES = ("crc-viz.js", "crc-viz.css")
 # Expected yearly damage per location, averaged over the early and late windows
 # the pipeline uses (EARLY and LATE in pipelines/how_exposed_is_this_company.py).
-DAMAGE_KEYS = ("total_early", "total_late")
+DAMAGE_KEYS = ("total_damage_2025_2035", "total_damage_2070_2080")
+HAZARD_NAMES = {
+    "storm": "Hurricane wind damage",
+    "downpour": "Heavy rain damage",
+    "hot_weather": "Hot days damage",
+    "total": "Total expected damage",
+}
+WINDOW_YEARS = ("2025_2035", "2070_2080")
 HURRICANE_COLOURS = ["#fff7ec", "#fdd49e", "#fc8d59", "#d7301f", "#7f0000"]
 
 PAGE = """<!doctype html>
@@ -90,7 +97,7 @@ PAGE = """<!doctype html>
 
 
 STATIC_BOOT = """  const data = {data};
-  CrcViz.mountHazardMap(document.getElementById("map"), {{ source: data, layers }});"""
+  CrcViz.mountHazardMap(document.getElementById("map"), {{ source: data, layers, controlsPlacement: "overlay-top-right" }});"""
 
 # The hosted viewer reads its locations from the link (#<data>): raw-deflate JSON,
 # base64url, as {"k": [numeric keys], "r": [[lon, lat, city, value per key], ...]}.
@@ -113,7 +120,7 @@ VIEWER_BOOT = """  const hint = document.getElementById("fallback");
       return {{ type: "Feature", geometry: {{ type: "Point", coordinates: [r[0], r[1]] }}, properties: properties }};
     }}) }};
     hint.remove();
-    CrcViz.mountHazardMap(document.getElementById("map"), {{ source: data, layers: config }});
+    CrcViz.mountHazardMap(document.getElementById("map"), {{ source: data, layers: config, controlsPlacement: "overlay-top-right" }});
   }}).catch(function (e) {{ hint.textContent = "Could not read the map data: " + e.message; }});"""
 
 LINK_URL = "https://riskthinking.github.io/crc-docs/map/"
@@ -154,6 +161,29 @@ def decode_link(link: str) -> dict[str, Any]:
     return json.loads(zlib.decompress(packed, -15))
 
 
+def key_aliases(hurricanes: str | None = None) -> dict[str, str]:
+    """Readable tooltip labels, without units (the units live in ``fieldInfo``)."""
+    aliases = {
+        f"{hazard}_damage_{years}": f"{name} {years.replace('_', '-')}"
+        for hazard, name in HAZARD_NAMES.items()
+        for years in WINDOW_YEARS
+    }
+    if hurricanes:
+        aliases[hurricanes] = "Hurricanes within 50 km (count)"
+    return aliases
+
+
+def field_info(hurricanes: str | None = None) -> dict[str, dict[str, str]]:
+    """Label and unit per field for crc-viz's ``fieldInfo``: damage is % of value."""
+    info = {
+        key: {"label": label, "unit": "% of value per year"}
+        for key, label in key_aliases().items()
+    }
+    if hurricanes:
+        info[hurricanes] = {"label": "Hurricanes within 50 km", "unit": ""}
+    return info
+
+
 def layer_config(geojson: dict[str, Any]) -> list[dict[str, Any]]:
     """Colour points by hurricane count, else by late-century damage."""
     features = geojson.get("features") or []
@@ -166,25 +196,29 @@ def layer_config(geojson: dict[str, Any]) -> list[dict[str, Any]]:
                 "visKey": hurricanes,
                 "title": "Hurricanes within 50 km",
                 "unit": "hurricanes",
+                "fieldInfo": field_info(hurricanes),
                 "colorScheme": HURRICANE_COLOURS,
                 "radius": 6,
                 "tooltip": {
                     "titleKey": "city",
                     "valueKeys": [hurricanes, *DAMAGE_KEYS],
+                    "keyAliases": key_aliases(hurricanes),
                 },
             }
         ]
-    if "total_late" in props:
+    if DAMAGE_KEYS[1] in props:
         return [
             {
                 "id": "points",
-                "visKey": "total_late",
+                "visKey": DAMAGE_KEYS[1],
                 "title": "Expected yearly damage, 2070-2080",
                 "unit": "% of value",
+                "fieldInfo": field_info(),
                 "radius": 6,
                 "tooltip": {
                     "titleKey": "city",
                     "valueKeys": list(DAMAGE_KEYS),
+                    "keyAliases": key_aliases(),
                 },
             }
         ]
