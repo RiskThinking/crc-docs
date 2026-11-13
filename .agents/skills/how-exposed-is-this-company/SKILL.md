@@ -93,34 +93,49 @@ location with its hurricane count (`hurricanes_within_50km_since_<year>`) and
 expected damage fields.
 
 **Map.** Build one self-contained HTML map of the locations, using crc-viz's
-hazard map, coloured by how many hurricanes passed within 50 km. Hovering a
-location shows its city, the hurricane count and the CRC Open expected yearly
-damage (% of building value) for 2025-2035 and 2070-2080. Use this script, not a
-map of your own, so the page carries those values and the VELO map styling:
+hazard map, coloured by how many hurricanes passed within 50 km. Every
+numeric field of the locations (hurricane count and the CRC Open expected yearly
+damage per hazard and in total, % of building value, for 2025-2035 and 2070-2080)
+is offered as a colour field in the map's settings. Use this script, not a map of
+your own, so the page carries those fields and the VELO map styling:
 
 ```sh
 curl -fsSL -o build_map_page.py \
   https://raw.githubusercontent.com/RiskThinking/crc-docs/map-skill-test/tools/build_map_page.py
+python build_map_page.py pipeline_output/company/locations.geojson --link
 python build_map_page.py pipeline_output/company/locations.geojson \
-  --output pipeline_output/company/map --serve
+  --output pipeline_output/company/map
 ```
 
-(Inside a crc-docs checkout use `tools/build_map_page.py`, and the pipeline
-already does this and prints a `Map:` line.) The script finds or downloads the map
-bundle by itself and writes `pipeline_output/company/map/index.html`, about 3 MB
-with everything inline. Use your `--output` folder from the run above.
+(Inside a crc-docs checkout use `tools/build_map_page.py`; the pipeline already
+writes the page and prints a `Map:` line.)
 
-`--serve` starts a web server for the page and prints
-`Live map: http://localhost:8000/index.html`. Run it in the background so it keeps
-serving, then present that link as a clickable link for the person to open in their
-own browser. Do not display or embed the map in a preview panel or the chat, and do
-not paste the file's contents: the map only works in a real browser tab. Keep the
-server running while the person looks at it. Also make `index.html` available as a
-downloadable file or attachment, in case the link does not open; say it opens in
-Chrome, Safari or Firefox and needs internet for the basemap. If you cannot start
-the server or hand over the file, say so,
-give the path to `locations.geojson` and say it opens in QGIS, geojson.io or
-Kepler.gl. Never claim a map was shown if it was not.
+**Always deliver all three map outputs for every Route 2 answer, without being
+asked.** The person should never have to request the map, the file or the data:
+
+1. **Live map link.** `--link` prints `Live map: https://riskthinking.github.io/crc-docs/map/#...`:
+   a link to the hosted map viewer with every location packed into the text
+   after the `#`. Give it as a clickable link, copied exactly and in full, never
+   shortened or retyped; it opens the map in their own browser. Do not start a
+   local server, and do not show or embed the map in a preview panel or the chat:
+   the map only works in a real browser tab.
+2. **Downloadable map file.** The second command writes `index.html` (about 3 MB,
+   everything inline, bundle downloaded automatically) to
+   `pipeline_output/company/map/index.html`. Offer it as a file to download in
+   case the link fails, and say it opens in Chrome, Safari or Firefox and needs
+   internet for the basemap.
+3. **Downloadable GeoJSON.** Offer `pipeline_output/company/locations.geojson`
+   (the map data: one point per location with hurricane counts and expected
+   damage fields) as a second file to download, and say it also opens in QGIS,
+   geojson.io or Kepler.gl.
+
+If you run in a sandbox or chat host that can attach files (for example an
+outputs or downloads folder, or an artifact/file-sharing tool), copy
+`index.html` and `locations.geojson` there, named after the brand (for example
+`walmart-fl-map.html`, `walmart-fl-locations.geojson`), so they appear as
+downloads. Otherwise give each file's full absolute path. If you cannot run the
+script, say so and still give the path to `locations.geojson`. Never claim a map
+was shown or a file was provided if it was not.
 
 If a download is blocked, the sandbox probably limits internet access. Say so,
 and suggest allowing `pypi.org`, `raw.githubusercontent.com`,
@@ -155,6 +170,9 @@ would show, then offer both options:
    horizon (or period).
 3. **Chart**, when you can draw one: expected impact by horizon, one line per
    future; or the index ranked by expected impact with the company highlighted.
+   For Route 2, follow the chart with a **Map and files** block listing the
+   live map link, the downloadable `index.html` map and the downloadable
+   `locations.geojson`, as described in Route 2. Include it every time.
 4. **How sure are we**, one or two lines: scores depend on which assets are
    known and on damage functions, so they are best for comparing companies and
    futures; Route 2 uses an open map of one area's locations with equal values,

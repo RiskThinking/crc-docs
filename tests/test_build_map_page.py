@@ -67,21 +67,44 @@ def test_page_template_keeps_js_newline_escapes():
     assert 'problems.join("\\n")' in PAGE
 
 
-def test_tooltip_lists_the_damage_values():
-    from tools.build_map_page import layer_config
+def test_link_round_trips_every_numeric_field():
+    from tools.build_map_page import decode_link, encode_link
 
     props = {
-        "city": "x",
-        "hurricanes_within_50km_since_1990": 2,
+        "asset_id": "a1",
+        "name": "Target",
+        "city": "Miami",
+        "hurricanes_within_50km_since_1990": 3,
+        "cyclone_early": 0.12344,
+        "hot_days_late": 0.8,
         "total_early": 0.5,
         "total_late": 1.4,
     }
-    geojson = {"features": [{"properties": props}]}
-    tooltip = layer_config(geojson)[0]["tooltip"]
-    assert tooltip["footerKeys"] == ["total_early", "total_late"]
-    assert "2070-2080" in tooltip["keyAliases"]["total_late"]
-    only_damage = {"features": [{"properties": {"city": "x", "total_late": 1.4}}]}
-    assert layer_config(only_damage)[0]["tooltip"]["footerKeys"] == [
+    geojson = {
+        "features": [
+            {
+                "geometry": {"type": "Point", "coordinates": [-80.1234, 26.5]},
+                "properties": props,
+            }
+        ]
+    }
+    link = encode_link(geojson)
+    assert link.startswith("https://") and "#" in link
+    pack = decode_link(link)
+    assert pack["k"] == [
+        "hurricanes_within_50km_since_1990",
+        "cyclone_early",
+        "hot_days_late",
         "total_early",
         "total_late",
     ]
+    assert pack["r"] == [[-80.123, 26.5, "Miami", 3, 0.1234, 0.8, 0.5, 1.4]]
+
+
+def test_viewer_reads_the_link(tmp_path):
+    from tools.build_map_page import build_viewer, find_bundle
+
+    viz = find_bundle(download=False)
+    page = build_viewer(viz, tmp_path).read_text()
+    assert "location.hash" in page and "DecompressionStream" in page
+    assert "__hurricanes__" in page
