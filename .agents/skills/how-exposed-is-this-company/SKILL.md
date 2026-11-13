@@ -11,8 +11,11 @@ the host can draw it, and one line on how sure we are. Avoid jargon; when a term
 is unavoidable, explain it in a few words.
 
 Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/how-exposed-is-this-company/SKILL.md`.
-If you can fetch it and it differs from this copy, follow the fetched one.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/map-skill-test/.agents/skills/how-exposed-is-this-company/SKILL.md`.
+If you can fetch it and it differs from this copy, follow the fetched one,
+unless you are inside a checkout of the crc-docs repository: then this copy and
+the repository's own `pipelines/` and `tools/` are newer than the published
+ones, so use them and do not download replacements.
 
 ## 1. Find the company
 
@@ -72,7 +75,7 @@ toolkit and run the script:
 ```sh
 python -m pip install --quiet --upgrade "crc-sdk[geometry]"
 curl -fsSL -o how_exposed_is_this_company.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_exposed_is_this_company.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/map-skill-test/pipelines/how_exposed_is_this_company.py
 python how_exposed_is_this_company.py --brand "BRAND" --bounds W S E N --region XX --skip-cdt
 ```
 
@@ -84,6 +87,40 @@ brand's spelling on its storefronts. Read `pipeline_output/company/summary.json`
 hurricane passed within 50 km of; `b_crc_open.average_expected_damage_pct`
 holds the average location's expected yearly damage (% of building value) by
 hazard for 2025–2035 (`early`) and 2070–2080 (`late`).
+
+The run also writes `pipeline_output/company/locations.geojson`: one point per
+location with its hurricane count (`hurricanes_within_50km_since_<year>`) and
+expected damage fields.
+
+**Map.** Build one self-contained HTML map of the locations, using crc-viz's
+hazard map, coloured by how many hurricanes passed within 50 km. Hovering a
+location shows its city, the hurricane count and the CRC Open expected yearly
+damage (% of building value) for 2025-2035 and 2070-2080. Use this script, not a
+map of your own, so the page carries those values and the VELO map styling:
+
+```sh
+curl -fsSL -o build_map_page.py \
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/map-skill-test/tools/build_map_page.py
+python build_map_page.py pipeline_output/company/locations.geojson \
+  --output pipeline_output/company/map --serve
+```
+
+(Inside a crc-docs checkout use `tools/build_map_page.py`, and the pipeline
+already does this and prints a `Map:` line.) The script finds or downloads the map
+bundle by itself and writes `pipeline_output/company/map/index.html`, about 3 MB
+with everything inline. Use your `--output` folder from the run above.
+
+`--serve` starts a web server for the page and prints
+`Live map: http://localhost:8000/index.html`. Run it in the background so it keeps
+serving, then present that link as a clickable link for the person to open in their
+own browser. Do not display or embed the map in a preview panel or the chat, and do
+not paste the file's contents: the map only works in a real browser tab. Keep the
+server running while the person looks at it. Also make `index.html` available as a
+downloadable file or attachment, in case the link does not open; say it opens in
+Chrome, Safari or Firefox and needs internet for the basemap. If you cannot start
+the server or hand over the file, say so,
+give the path to `locations.geojson` and say it opens in QGIS, geojson.io or
+Kepler.gl. Never claim a map was shown if it was not.
 
 If a download is blocked, the sandbox probably limits internet access. Say so,
 and suggest allowing `pypi.org`, `raw.githubusercontent.com`,

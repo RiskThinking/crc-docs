@@ -20,7 +20,8 @@ Run from the repository root:
 
 ``--bounds`` is ``min_lon min_lat max_lon max_lat`` (default: Florida).
 Outputs land in ``--output`` (default ``pipeline_output/company``):
-``summary.json`` and ``locations.csv``. Overture places show where a brand
+``summary.json``, ``locations.csv`` and ``locations.geojson`` (one point per
+location, for the crc-viz hazard map). Overture places show where a brand
 operates; they are not evidence of ownership, value or insurance. See
 ``notebooks/how_exposed_is_this_company.ipynb`` for the explained version.
 """
@@ -31,6 +32,7 @@ import argparse
 import csv
 import json
 import os
+import sys
 import tempfile
 import urllib.request
 import warnings
@@ -427,6 +429,61 @@ def write_atomic(path: Path, text: str) -> None:
     os.replace(handle.name, path)
 
 
+def locations_geojson(
+    rows: list[dict[str, Any]],
+    counts: list[int] | None,
+    per_location: dict[str, dict[str, float]],
+    since: int,
+) -> dict[str, Any]:
+    """One Point per location, ready for the crc-viz hazard map.
+
+    Colour the map by ``hurricanes_within_50km_since_<year>`` (when hurricanes
+    were not skipped) or by any of the expected-damage fields (% of value).
+    """
+    count_key = f"hurricanes_within_{RADIUS_KM}km_since_{since}"
+    features = []
+    for i, row in enumerate(rows):
+        properties = {
+            k: v for k, v in row.items() if k not in ("longitude", "latitude")
+        }
+        if counts:
+            properties[count_key] = counts[i]
+        properties.update(per_location.get(row["asset_id"], {}))
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [row["longitude"], row["latitude"]],
+                },
+                "properties": properties,
+            }
+        )
+    return {"type": "FeatureCollection", "features": features}
+
+
+def build_map(output: Path) -> Path | None:
+    """Build the crc-viz hazard map page when the bundle is available locally.
+
+    Needs the repository's ``tools/build_map_page.py``; a downloaded copy of this
+    script alone skips the map (the skill then runs that tool itself).
+    """
+    root = Path(__file__).resolve().parents[1]
+    if not (root / "tools" / "build_map_page.py").is_file():
+        return None
+    sys.path.insert(0, str(root))
+    try:
+        from tools.build_map_page import build, find_bundle
+    except ImportError:
+        return None
+    viz = find_bundle(download=False)
+    if viz is None:
+        return None
+    return build(
+        output / "locations.geojson", viz, output / "map", "Locations on the CRC map"
+    )
+
+
 def headline(brand: str, places: dict, storms: dict, crc: dict, cdt: dict) -> str:
     parts = []
     if places["available"] and storms.get("available"):
@@ -552,7 +609,24 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
                     ]
                 )
         os.replace(handle.name, args.output / "locations.csv")
+        write_atomic(
+            args.output / "locations.geojson",
+            json.dumps(
+                locations_geojson(rows, storms.get("counts"), per_location, args.since)
+            ),
+        )
     print(answer)
+    if places["available"]:
+        page = build_map(args.output)
+        if page:
+            print(
+                f"Map: {page.resolve()} (one self-contained file; open it in a browser)"
+            )
+        else:
+            print(
+                f"No map built (crc-viz bundle not found); open {args.output}/"
+                "locations.geojson in QGIS or geojson.io."
+            )
     return summary
 
 

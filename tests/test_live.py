@@ -200,6 +200,12 @@ def test_how_exposed_pipeline(tmp_path: Path) -> None:
     damage = summary["b_crc_open"]["average_expected_damage_pct"]
     assert damage["hot_days"]["late"] > damage["hot_days"]["early"]
     assert (tmp_path / "locations.csv").read_text().count("\n") > 10
+    geojson = json.loads((tmp_path / "locations.geojson").read_text())
+    assert len(geojson["features"]) == summary["a_public"]["locations"]["count"]
+    assert any(
+        k.startswith("hurricanes_within_50km_since_")
+        for k in geojson["features"][0]["properties"]
+    )
 
 
 @pytest.mark.skipif(
