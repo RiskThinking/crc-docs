@@ -11,7 +11,7 @@ the host can draw it, and one line on how sure we are. Avoid jargon; when a term
 is unavoidable, explain it in a few words.
 
 Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/map-skill-test/.agents/skills/how-exposed-is-this-company/SKILL.md`.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/how-exposed-is-this-company/SKILL.md`.
 If you can fetch it and it differs from this copy, follow the fetched one,
 unless you are inside a checkout of the crc-docs repository: then this copy and
 the repository's own `pipelines/` and `tools/` are newer than the published
@@ -75,7 +75,7 @@ toolkit and run the script:
 ```sh
 python -m pip install --quiet --upgrade "crc-sdk[geometry]"
 curl -fsSL -o how_exposed_is_this_company.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/map-skill-test/pipelines/how_exposed_is_this_company.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_exposed_is_this_company.py
 python how_exposed_is_this_company.py --brand "BRAND" --bounds W S E N --region XX --skip-cdt
 ```
 
@@ -104,7 +104,7 @@ to `CRCMap`:
 
 ```sh
 curl -fsSL -o build_map_page.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/map-skill-test/tools/build_map_page.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/tools/build_map_page.py
 python build_map_page.py pipeline_output/company/locations.geojson --link
 python build_map_page.py pipeline_output/company/locations.geojson \
   --output pipeline_output/company/map

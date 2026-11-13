@@ -31,7 +31,9 @@ from typing import Any
 
 # Where a standalone copy of this script downloads the bundle from. Point
 # CRC_VIZ_BASE_URL elsewhere (a release, a CDN) to use another build.
-BUNDLE_URL = "https://raw.githubusercontent.com/RiskThinking/crc-docs/map-skill-test/assets/crc-viz"
+BUNDLE_URL = (
+    "https://raw.githubusercontent.com/RiskThinking/crc-docs/main/assets/crc-viz"
+)
 BUNDLE_FILES = ("crc-viz.js", "crc-viz.css")
 # Expected yearly damage per location, averaged over the early and late windows
 # the pipeline uses (EARLY and LATE in pipelines/how_exposed_is_this_company.py).
@@ -169,7 +171,7 @@ def key_aliases(hurricanes: str | None = None) -> dict[str, str]:
         for years in WINDOW_YEARS
     }
     if hurricanes:
-        aliases[hurricanes] = "Hurricanes within 50 km (count)"
+        aliases[hurricanes] = "Hurricanes within 50 km"
     return aliases
 
 
