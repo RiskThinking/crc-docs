@@ -224,3 +224,6 @@ __marimo__/
 
 # Local planning notes (never committed)
 plan/
+
+# crc-viz bundle build
+tools/crc-viz-bundle/node_modules/

@@ -31,8 +31,11 @@ CI also packages every skill as an uploadable zip (`tools/package_skills.py`).
   chart previews. `notebooks/climate_risk_curves_primer.ipynb` teaches the
   concepts.
 - `notebooks/sources/`: tours of individual public data sources.
-- `pipelines/<question>.py`: the headless answer; writes `summary.json`.
+- `pipelines/<question>.py`: the headless answer; writes `summary.json`
+  (the company pipeline also writes `locations.geojson` for the crc-viz map).
   Other files in `pipelines/` back the source notebooks.
+- `tools/build_map_page.py`: turns `locations.geojson` into one self-contained HTML file on the
+  crc-viz hazard map (bundle built from the npm package in `tools/crc-viz-bundle`; see its docstring).
 - `tests/`: offline checks, plus live runs behind `CRC_DOCS_LIVE=1`.
 
 ## Checks
