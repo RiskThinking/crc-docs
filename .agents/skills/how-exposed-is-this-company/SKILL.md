@@ -97,7 +97,10 @@ hazard map, coloured by how many hurricanes passed within 50 km. Every
 numeric field of the locations (hurricane count and the CRC Open expected yearly
 damage per hazard and in total, % of building value, for 2025-2035 and 2070-2080)
 is offered as a colour field in the map's settings. Use this script, not a map of
-your own, so the page carries those fields and the VELO map styling:
+your own, so the page carries those fields and the VELO map styling. The script places the map's **Settings** control floating over
+the map's upper-right corner (`controlsPlacement: "overlay-top-right"`), not in a bar
+above it; keep it there, and if you ever build a map page yourself, pass that option
+to `CRCMap`:
 
 ```sh
 curl -fsSL -o build_map_page.py \

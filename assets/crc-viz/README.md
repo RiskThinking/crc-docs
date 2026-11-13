@@ -1,7 +1,7 @@
 # crc-viz browser bundle
 
 `crc-viz.js` and `crc-viz.css` are a browser build of the crc-viz hazard map, built from the
-published npm package `@climateriskcommons/crc-viz@0.1.0-alpha.2`, with React, MapLibre and
+published npm package `@climateriskcommons/crc-viz@0.1.0-alpha.3`, with React, MapLibre and
 the MapLibre worker bundled in. `tools/build_map_page.py` inlines them into one
 self-contained HTML map.
 
