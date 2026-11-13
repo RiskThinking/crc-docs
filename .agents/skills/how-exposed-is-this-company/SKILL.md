@@ -113,8 +113,8 @@ python build_map_page.py pipeline_output/company/locations.geojson \
 (Inside a crc-docs checkout use `tools/build_map_page.py`; the pipeline already
 writes the page and prints a `Map:` line.)
 
-**Always deliver all three map outputs for every Route 2 answer, without being
-asked.** The person should never have to request the map, the file or the data:
+**Always deliver all three map outputs whenever you have locations to map, on any
+data route, without being asked.** The person should never have to request the map, the file or the data:
 
 1. **Live map link.** `--link` prints `Live map: https://riskthinking.github.io/crc-docs/map/#...`:
    a link to the hosted map viewer with every location packed into the text
@@ -124,7 +124,8 @@ asked.** The person should never have to request the map, the file or the data:
    the map only works in a real browser tab.
 2. **Downloadable map file.** The second command writes `index.html` (about 3 MB,
    everything inline, bundle downloaded automatically) to
-   `pipeline_output/company/map/index.html`. Offer it as a file to download in
+   `pipeline_output/company/map/index.html` (Route 2 paths; use your own folder
+   on other routes). Offer it as a file to download in
    case the link fails, and say it opens in Chrome, Safari or Firefox and needs
    internet for the basemap.
 3. **Downloadable GeoJSON.** Offer `pipeline_output/company/locations.geojson`
@@ -139,6 +140,14 @@ outputs or downloads folder, or an artifact/file-sharing tool), copy
 downloads. Otherwise give each file's full absolute path. If you cannot run the
 script, say so and still give the path to `locations.geojson`. Never claim a map
 was shown or a file was provided if it was not.
+
+**Other routes.** The map script draws any GeoJSON of points and offers every
+numeric property as a colour field, so it is not limited to CRC Open. When the
+CDT route (Route 1) returns assets with coordinates, write them as a
+`locations.geojson` (one point per asset, the scores as numeric properties, and a
+`city` or `name` property for the tooltip), run the same two commands and deliver
+the same three outputs. If a route returns no coordinates, say there is no map for
+this answer; never place points from memory.
 
 If a download is blocked, the sandbox probably limits internet access. Say so,
 and suggest allowing `pypi.org`, `raw.githubusercontent.com`,
@@ -173,9 +182,10 @@ would show, then offer both options:
    horizon (or period).
 3. **Chart**, when you can draw one: expected impact by horizon, one line per
    future; or the index ranked by expected impact with the company highlighted.
-   For Route 2, follow the chart with a **Map and files** block listing the
-   live map link, the downloadable `index.html` map and the downloadable
-   `locations.geojson`, as described in Route 2. Include it every time.
+   On every route that has locations, follow the chart with a **Map and files**
+   block listing the live map link, the downloadable `index.html` map and the
+   downloadable `locations.geojson`, as described under Route 2. Include it every
+   time.
 4. **How sure are we**, one or two lines: scores depend on which assets are
    known and on damage functions, so they are best for comparing companies and
    futures; Route 2 uses an open map of one area's locations with equal values,
