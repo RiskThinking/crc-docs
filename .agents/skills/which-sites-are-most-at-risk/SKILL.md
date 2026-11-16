@@ -11,8 +11,11 @@ one chart when the host can draw it, and one line on how sure we are. Avoid
 jargon; when a term is unavoidable, explain it in a few words.
 
 Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/which-sites-are-most-at-risk/SKILL.md`.
-If you can fetch it and it differs from this copy, follow the fetched one.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2406-crc-docs-add-map-visualization-for-which-sites-are/.agents/skills/which-sites-are-most-at-risk/SKILL.md`.
+If you can fetch it and it differs from this copy, follow the fetched one,
+unless you are inside a checkout of the crc-docs repository: then this copy and
+the repository's own `pipelines/` and `tools/` are newer than the published
+ones, so use them and do not download replacements.
 
 ## 1. Collect the sites
 
@@ -51,12 +54,18 @@ emissions future and a matching historical baseline. For each site:
 Rank the sites by the change from the historical baseline to 2070–2090 under
 each pathway.
 
+Then write `sites.geojson` for the map (see **Map and files** under Route 2): one
+point per site with a `title` property (the site's name, plus its city when known) and numeric properties
+`tx_max_change`, `hot_days_change` and `rx1day_change` (the SSP5-8.5 change from
+the baseline, in °C, days and mm), plus the same for the other pathways as
+`<hazard>_<pathway>_change`. Leave out any value CDT did not return.
+
 ### Route 2: CRC Open, when you can run Python with internet access
 
 CRC Open is free, ready-made climate data. Its public release covers one
 high-emissions future (SSP5-8.5); other futures are available from
 opensource@riskthinking.ai. Write the sites to `sites.csv` with the header
-`site,latitude,longitude`, install or update the toolkit, then run the script:
+`site,latitude,longitude` (add a `city` column if you have one: the map title then reads "site (city)"), install or update the toolkit, then run the script:
 
 ```sh
 python -m pip install --quiet --upgrade "crc-sdk[geometry]"
@@ -72,6 +81,52 @@ change per hazard, and `b_crc_open.one_in_10` holds every site's 1-in-10-year
 value in 2025–2035 (`early`), 2070–2080 (`late`) and the `change`, for the
 hottest day (°C), wettest day (mm), hot days and wildfire weather (Fire Weather
 Index).
+
+The run also writes `pipeline_output/sites/sites.geojson`: one point per site with
+its `title` (site and city), `site`, `city` when known, and its early, late and change values per hazard (`tx_max_2025_2035`,
+`tx_max_2070_2080`, `tx_max_change` and the same for `rx1day`, `hot_days`, `fwi`).
+
+**Map and files.** Build one self-contained HTML map of the sites on crc-viz's
+hazard map, coloured by the change in hottest day; every numeric field is offered
+as a colour field in the map's settings. Use this script, not a map of your own,
+and keep the **Settings** control floating over the map's upper-right corner (the
+script does this):
+
+```sh
+curl -fsSL -o build_map_page.py \
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/tools/build_map_page.py
+python build_map_page.py pipeline_output/sites/sites.geojson --link
+python build_map_page.py pipeline_output/sites/sites.geojson \
+  --output pipeline_output/sites/map --title "Sites on the CRC map"
+```
+
+(Inside a crc-docs checkout use `tools/build_map_page.py`; the pipeline already
+writes the page and prints a `Map:` line.)
+
+**Always deliver all three outputs whenever you have sites to map, on any data
+route, without being asked:**
+
+1. **Live map link.** `--link` prints `Live map: https://riskthinking.github.io/crc-docs/map/#...`,
+   a link to the hosted map viewer with every site packed into the text after
+   the `#`. Give it as a clickable link, copied exactly and in full, never
+   shortened or retyped. Do not start a local server, and do not show or embed
+   the map in a preview panel or the chat: it only works in a real browser tab.
+2. **Downloadable map file.** The second command writes `index.html` (about 3 MB,
+   everything inline) to `pipeline_output/sites/map/index.html`. Offer it as a
+   file to download in case the link fails, and say it opens in Chrome, Safari
+   or Firefox and needs internet for the basemap.
+3. **Downloadable GeoJSON.** Offer `pipeline_output/sites/sites.geojson` (one
+   point per site with its values) as a second file to download, and say it also
+   opens in QGIS, geojson.io or Kepler.gl.
+
+If you run in a sandbox or chat host that can attach files (for example an
+outputs or downloads folder, or an artifact/file-sharing tool), copy `index.html`
+and `sites.geojson` there with descriptive names (for example
+`warehouses-map.html`, `warehouses-sites.geojson`) so they appear as downloads.
+Otherwise give each file's full absolute path. If you cannot run the script, say
+so and still give the path to `sites.geojson`. Never claim a map was shown or a
+file was provided if it was not. On the CDT route the same two commands work on
+the `sites.geojson` you wrote; if you have no coordinates, say there is no map.
 
 If a download is blocked, the sandbox probably limits internet access. Say so,
 and suggest allowing `pypi.org`, `raw.githubusercontent.com` and
@@ -101,6 +156,9 @@ would show, then offer both options:
    units. Sort by the hazard the person cares about, or by hottest-day change.
 3. **Chart**, when you can draw one: for one hazard, a line per site from its
    early value to its late value (or historical to future), sorted by the change.
+   On every route that has sites, follow the chart with a **Map and files** block
+   listing the live map link, the downloadable `index.html` map and the
+   downloadable `sites.geojson`, as described under Route 2. Include it every time.
 4. **How sure are we**, one or two lines: values describe an area of about
    250 km² around each site, not the building; they come from climate models;
    being exposed is not the same as being damaged, which also depends on the

@@ -15,9 +15,12 @@ Run from the repository root:
     uv run python pipelines/which_sites_are_most_at_risk.py --skip-era5
     uv run python pipelines/which_sites_are_most_at_risk.py --sites my_sites.csv
 
-``--sites`` is a CSV with ``site,latitude,longitude`` columns (default: ten
+``--sites`` is a CSV with ``site,latitude,longitude`` columns and an optional
+``city`` (default: ten
 example warehouses in North America). Outputs land in ``--output`` (default
-``pipeline_output/sites``): ``summary.json`` and ``site_hazards.csv``. ERA5
+``pipeline_output/sites``): ``summary.json``, ``site_hazards.csv`` and
+``sites.geojson`` (one point per site with its CRC Open values, for the crc-viz
+hazard map; inside the repository the map page is written to ``map/``). ERA5
 takes about 15 seconds per year per hazard; ``--skip-era5`` skips it. See
 ``notebooks/which_sites_are_most_at_risk.ipynb`` for the explained version.
 """
@@ -28,6 +31,7 @@ import argparse
 import csv
 import json
 import os
+import sys
 import tempfile
 import warnings
 from datetime import UTC, datetime
@@ -75,15 +79,24 @@ def read_sites(path: Path | None) -> list[dict[str, Any]]:
     else:
         with path.open(newline="") as handle:
             rows = [
-                (row["site"], float(row["latitude"]), float(row["longitude"]))
+                (
+                    row["site"],
+                    float(row["latitude"]),
+                    float(row["longitude"]),
+                    (row.get("city") or "").strip(),
+                )
                 for row in csv.DictReader(handle)
             ]
-    names = [name for name, _, _ in rows]
+    names = [row[0] for row in rows]
     if len(set(names)) != len(names):
         raise ValueError("site names must be unique")
-    return [
-        {"site": name, "latitude": lat, "longitude": lon} for name, lat, lon in rows
-    ]
+    sites = []
+    for name, lat, lon, *city in rows:
+        site = {"site": name, "latitude": lat, "longitude": lon}
+        if city and city[0]:  # optional ``city`` column, shown beside the name
+            site["city"] = city[0]
+        sites.append(site)
+    return sites
 
 
 def era5_answer(
@@ -253,6 +266,61 @@ def cdt_answer(sites: list[dict[str, Any]]) -> dict[str, Any]:
     return {"available": True, "one_in_10": table}
 
 
+def sites_geojson(
+    sites: list[dict[str, Any]], table: dict[str, dict[str, dict[str, float]]]
+) -> dict[str, Any]:
+    """One Point per site: ``<hazard>_2025_2035``, ``<hazard>_2070_2080`` and ``<hazard>_change``.
+
+    The names match ``tools/build_map_page.py``, which declares each field's unit.
+    """
+    names = {"early": "2025_2035", "late": "2070_2080", "change": "change"}
+    features = []
+    for site in sites:
+        city = site.get("city", "")
+        title = (
+            f"{site['site']} ({city})"
+            if city and city.lower() not in site["site"].lower()
+            else site["site"]
+        )
+        properties: dict[str, Any] = {"title": title, "site": site["site"]}
+        if city:
+            properties["city"] = city
+        for hazard in HAZARDS:
+            for key, value in table.get(site["site"], {}).get(hazard, {}).items():
+                properties[f"{hazard}_{names[key]}"] = value
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [site["longitude"], site["latitude"]],
+                },
+                "properties": properties,
+            }
+        )
+    return {"type": "FeatureCollection", "features": features}
+
+
+def build_map(output: Path) -> Path | None:
+    """Build the crc-viz map page when the repository's map tool and bundle are here.
+
+    A downloaded copy of this script alone skips it (the skill then runs
+    ``build_map_page.py`` itself).
+    """
+    root = Path(__file__).resolve().parents[1]
+    if not (root / "tools" / "build_map_page.py").is_file():
+        return None
+    sys.path.insert(0, str(root))
+    try:
+        from tools.build_map_page import build, find_bundle
+    except ImportError:
+        return None
+    viz = find_bundle(download=False)
+    if viz is None:
+        return None
+    return build(output / "sites.geojson", viz, output / "map", "Sites on the CRC map")
+
+
 def write_atomic(path: Path, text: str) -> None:
     with tempfile.NamedTemporaryFile(
         "w", dir=path.parent, delete=False, suffix=".tmp"
@@ -337,6 +405,22 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
             for hazard, entry in hazards.items():
                 lines += [f"cdt,{site},{hazard},{k},{v}" for k, v in entry.items()]
     write_atomic(args.output / "site_hazards.csv", "\n".join(lines) + "\n")
+
+    if crc_open["available"]:
+        write_atomic(
+            args.output / "sites.geojson",
+            json.dumps(sites_geojson(sites, crc_open["one_in_10"])),
+        )
+        page = build_map(args.output)
+        if page:
+            print(
+                f"Map: {page.resolve()} (one self-contained file; open it in a browser)"
+            )
+        else:
+            print(
+                f"No map built (crc-viz bundle not found); open {args.output}/"
+                "sites.geojson in QGIS or geojson.io."
+            )
 
     print(answer)
     return summary
