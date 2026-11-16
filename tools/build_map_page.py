@@ -45,6 +45,15 @@ HAZARD_NAMES = {
     "total": "Total expected damage",
 }
 WINDOW_YEARS = ("2025_2035", "2070_2080")
+# Sites from pipelines/which_sites_are_most_at_risk.py: 1-in-10-year value per hazard
+# in each window (<hazard>_<years>) and the change between them (<hazard>_change).
+SITE_HAZARDS = {
+    "tx_max": ("Hottest day", "°C"),
+    "rx1day": ("Wettest day", "mm"),
+    "hot_days": ("Hot days", "days"),
+    "fwi": ("Wildfire weather", "Fire Weather Index"),
+}
+SITE_WINDOWS = {"2025_2035": "2025-2035", "2070_2080": "2070-2080", "change": "change"}
 HURRICANE_COLOURS = ["#fff7ec", "#fdd49e", "#fc8d59", "#d7301f", "#7f0000"]
 
 PAGE = """<!doctype html>
@@ -115,9 +124,10 @@ VIEWER_BOOT = """  const hint = document.getElementById("fallback");
   }}
   load().then(function (pack) {{
     const hurricanes = pack.k.find(function (k) {{ return k.indexOf("hurricanes_within_") === 0; }}) || "";
-    const config = JSON.parse(JSON.stringify(layers).split("{placeholder}").join(hurricanes));
+    const kind = hurricanes || pack.k.indexOf("tx_max_change") < 0 ? "hurricanes" : "sites";
+    const config = JSON.parse(JSON.stringify(layers[kind]).split("{placeholder}").join(hurricanes));
     const data = {{ type: "FeatureCollection", features: pack.r.map(function (r) {{
-      const properties = {{ city: r[2] }};
+      const properties = {{ city: r[2], title: r[2] }};
       pack.k.forEach(function (k, i) {{ properties[k] = r[3 + i]; }});
       return {{ type: "Feature", geometry: {{ type: "Point", coordinates: [r[0], r[1]] }}, properties: properties }};
     }}) }};
@@ -148,7 +158,11 @@ def encode_link(geojson: dict[str, Any], base: str = LINK_URL) -> str:
             for key in keys
         ]
         rows.append(
-            [round(lon, 3), round(lat, 3), props.get("city") or props.get("name") or ""]
+            [
+                round(lon, 3),
+                round(lat, 3),
+                props.get("title") or props.get("city") or props.get("name") or "",
+            ]
             + values
         )
     text = json.dumps({"k": keys, "r": rows}, separators=(",", ":"), ensure_ascii=False)
@@ -175,6 +189,39 @@ def key_aliases(hurricanes: str | None = None) -> dict[str, str]:
     return aliases
 
 
+def site_aliases() -> dict[str, str]:
+    return {
+        f"{hazard}_{window}": f"{name} {label}"
+        for hazard, (name, _) in SITE_HAZARDS.items()
+        for window, label in SITE_WINDOWS.items()
+    }
+
+
+def site_field_info() -> dict[str, dict[str, str]]:
+    return {
+        f"{hazard}_{window}": {"label": f"{name} {label}", "unit": unit}
+        for hazard, (name, unit) in SITE_HAZARDS.items()
+        for window, label in SITE_WINDOWS.items()
+    }
+
+
+def site_layer() -> dict[str, Any]:
+    """Colour sites by how much the hottest day warms; every other field is selectable."""
+    return {
+        "id": "points",
+        "visKey": "tx_max_change",
+        "title": "Hottest day, change to 2070-2080",
+        "unit": "°C",
+        "fieldInfo": site_field_info(),
+        "radius": 8,
+        "tooltip": {
+            "titleKey": "title",
+            "valueKeys": [f"{h}_change" for h in SITE_HAZARDS],
+            "keyAliases": site_aliases(),
+        },
+    }
+
+
 def field_info(hurricanes: str | None = None) -> dict[str, dict[str, str]]:
     """Label and unit per field for crc-viz's ``fieldInfo``: damage is % of value."""
     info = {
@@ -187,17 +234,19 @@ def field_info(hurricanes: str | None = None) -> dict[str, dict[str, str]]:
 
 
 def layer_config(geojson: dict[str, Any]) -> list[dict[str, Any]]:
-    """Colour points by hurricane count, else by late-century damage."""
+    """Colour points by hurricane count, site climate change, else late-century damage."""
     features = geojson.get("features") or []
     props = features[0].get("properties", {}) if features else {}
     hurricanes = next((k for k in props if k.startswith("hurricanes_within_")), None)
+    if "tx_max_change" in props and not hurricanes:
+        return [site_layer()]
     if hurricanes:
         return [
             {
                 "id": "points",
                 "visKey": hurricanes,
                 "title": "Hurricanes within 50 km",
-                "unit": "hurricanes",
+                "unit": "",
                 "fieldInfo": field_info(hurricanes),
                 "colorScheme": HURRICANE_COLOURS,
                 "radius": 6,
@@ -327,7 +376,13 @@ def build_viewer(viz: Path, output: Path) -> Path:
         title="Locations on the CRC hazard map",
         css=(viz / "crc-viz.css").read_text().replace("</style", "<\\/style"),
         js=(viz / "crc-viz.js").read_text().replace("</script", "<\\/script"),
-        layers=json.dumps(layer_config(sample), indent=2),
+        layers=json.dumps(
+            {
+                "hurricanes": layer_config(sample),
+                "sites": [site_layer()],
+            },
+            indent=2,
+        ),
         boot=VIEWER_BOOT.format(
             placeholder="hurricanes_within_" + HURRICANE_PLACEHOLDER
         ),

@@ -108,3 +108,68 @@ def test_viewer_reads_the_link(tmp_path):
     page = build_viewer(viz, tmp_path).read_text()
     assert "location.hash" in page and "DecompressionStream" in page
     assert "__hurricanes__" in page
+
+
+SITES_GEOJSON = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [-112.07, 33.45]},
+            "properties": {
+                "title": "Warehouse 1 (Phoenix)",
+                "tx_max_2025_2035": 46.1,
+                "tx_max_2070_2080": 50.2,
+                "tx_max_change": 4.1,
+                "hot_days_change": 60.0,
+            },
+        }
+    ],
+}
+
+
+def test_layer_config_colours_sites_by_hottest_day_change() -> None:
+    (layer,) = layer_config(SITES_GEOJSON)
+    assert layer["visKey"] == "tx_max_change"
+    assert layer["fieldInfo"]["rx1day_change"]["unit"] == "mm"
+
+
+def test_sites_geojson_matches_the_map_fields() -> None:
+    from pipelines.which_sites_are_most_at_risk import sites_geojson
+    from tools.build_map_page import SITE_HAZARDS
+
+    sites = [{"site": "Phoenix", "latitude": 33.45, "longitude": -112.07}]
+    table = {
+        "Phoenix": {h: {"early": 1.0, "late": 3.0, "change": 2.0} for h in SITE_HAZARDS}
+    }
+    (feature,) = sites_geojson(sites, table)["features"]
+    assert feature["geometry"]["coordinates"] == [-112.07, 33.45]
+    props = feature["properties"]
+    assert props["title"] == props["site"] == "Phoenix"
+    assert {
+        f"{h}_{w}" for h in SITE_HAZARDS for w in ("2025_2035", "2070_2080", "change")
+    } <= set(props)
+    (layer,) = layer_config({"features": [feature]})
+    assert layer["visKey"] in props
+
+
+def test_viewer_offers_a_sites_layer(tmp_path):
+    from tools.build_map_page import build_viewer, find_bundle
+
+    page = build_viewer(find_bundle(download=False), tmp_path).read_text()
+    assert '"sites"' in page and "tx_max_change" in page
+
+
+def test_site_title_combines_site_and_city() -> None:
+    from pipelines.which_sites_are_most_at_risk import sites_geojson
+    from tools.build_map_page import decode_link, encode_link
+
+    sites = [
+        {"site": "Store 12", "city": "Tampa", "latitude": 27.9, "longitude": -82.4},
+        {"site": "Tampa DC", "city": "Tampa", "latitude": 28.0, "longitude": -82.5},
+        {"site": "Plain", "latitude": 29.0, "longitude": -82.0},
+    ]
+    geojson = sites_geojson(sites, {})
+    titles = [f["properties"]["title"] for f in geojson["features"]]
+    assert titles == ["Store 12 (Tampa)", "Tampa DC", "Plain"]
+    assert [r[2] for r in decode_link(encode_link(geojson))["r"]] == titles
