@@ -22,6 +22,7 @@ import functools
 import http.server
 import json
 import os
+import re
 import tempfile
 import urllib.request
 import webbrowser
@@ -60,6 +61,10 @@ SITE_WINDOWS = {"2025_2035": "2025-2035", "2070_2080": "2070-2080", "change": "c
 # CDT does not return the Fire Weather Index.
 CDT_PATHWAYS = {"ssp126": "SSP1-2.6", "ssp245": "SSP2-4.5", "ssp585": "SSP5-8.5"}
 CDT_HAZARDS = tuple(h for h in SITE_HAZARDS if h != "fwi")
+# CRC Open sites (tx_max_2070_2080) never have these in a field name; CDT sites always do.
+CDT_KEY = r"_ssp|_2070_2090$|_historic_|_baseline$"
+SITE_TITLE = "Hottest day, change to 2070-2080"
+CDT_SITE_TITLE = "Hottest day, SSP5-8.5 change to 2070-2090"
 HURRICANE_COLOURS = ["#fff7ec", "#fdd49e", "#fc8d59", "#d7301f", "#7f0000"]
 
 PAGE = """<!doctype html>
@@ -135,6 +140,7 @@ VIEWER_BOOT = """  const hint = document.getElementById("fallback");
     if (kind === "sites") {{
       const hazards = {hazards};
       const layer = config[0];
+      if (pack.k.some(function (k) {{ return new RegExp({cdt_key}).test(k); }})) layer.title = {cdt_title};
       pack.k.forEach(function (k) {{
         if (layer.fieldInfo[k]) return;
         Object.keys(hazards).some(function (h) {{
@@ -258,10 +264,11 @@ def site_aliases() -> dict[str, str]:
 def site_layer(props: dict[str, Any] | None = None) -> dict[str, Any]:
     """Colour sites by how much the hottest day warms; every other field is selectable."""
     extra = extra_site_field_info(props or {})
+    cdt = any(re.search(CDT_KEY, key) for key in props or {})
     return {
         "id": "points",
         "visKey": "tx_max_change",
-        "title": "Hottest day, change to 2070-2080",
+        "title": CDT_SITE_TITLE if cdt else SITE_TITLE,
         "unit": "°C",
         "fieldInfo": {**site_field_info(), **extra},
         "radius": 8,
@@ -289,15 +296,13 @@ def field_info(hurricanes: str | None = None) -> dict[str, dict[str, str]]:
 
 def layer_config(geojson: dict[str, Any]) -> list[dict[str, Any]]:
     """Colour points by hurricane count, site climate change, else late-century damage."""
-    features = geojson.get("features") or []
-    props = features[0].get("properties", {}) if features else {}
+    props: dict[str, Any] = {}  # every field on any feature; the first value wins
+    for feature in geojson.get("features") or []:
+        for key, value in feature.get("properties", {}).items():
+            props.setdefault(key, value)
     hurricanes = next((k for k in props if k.startswith("hurricanes_within_")), None)
     if "tx_max_change" in props and not hurricanes:
-        every_field: dict[str, Any] = {}
-        for feature in features:
-            for key, value in feature.get("properties", {}).items():
-                every_field.setdefault(key, value)
-        return [site_layer(every_field)]
+        return [site_layer(props)]
     if hurricanes:
         return [
             {
@@ -444,6 +449,8 @@ def build_viewer(viz: Path, output: Path) -> Path:
         boot=VIEWER_BOOT.format(
             placeholder="hurricanes_within_" + HURRICANE_PLACEHOLDER,
             hazards=json.dumps(SITE_HAZARDS),
+            cdt_key=json.dumps(CDT_KEY),
+            cdt_title=json.dumps(CDT_SITE_TITLE),
         ),
     )
     output.mkdir(parents=True, exist_ok=True)
