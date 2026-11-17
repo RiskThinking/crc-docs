@@ -111,7 +111,10 @@ python build_map_page.py pipeline_output/company/locations.geojson \
 ```
 
 (Inside a crc-docs checkout use `tools/build_map_page.py`; the pipeline already
-writes the page and prints a `Map:` line.)
+writes the page and prints `Live map:` and `Map:` lines. If either line is
+missing from its output, run the commands above yourself before answering. The
+live link is very long: copy it from the output without editing, never
+truncate it, and if it is cut off, print it again with `--link`.)
 
 **Always deliver all three map outputs whenever you have locations to map, on any
 data route, without being asked.** The person should never have to request the map, the file or the data:
