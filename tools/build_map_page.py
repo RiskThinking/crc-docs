@@ -293,7 +293,11 @@ def layer_config(geojson: dict[str, Any]) -> list[dict[str, Any]]:
     props = features[0].get("properties", {}) if features else {}
     hurricanes = next((k for k in props if k.startswith("hurricanes_within_")), None)
     if "tx_max_change" in props and not hurricanes:
-        return [site_layer(props)]
+        every_field: dict[str, Any] = {}
+        for feature in features:
+            for key, value in feature.get("properties", {}).items():
+                every_field.setdefault(key, value)
+        return [site_layer(every_field)]
     if hurricanes:
         return [
             {
