@@ -227,3 +227,26 @@ def test_layer_config_labels_hazard_fields_that_only_later_sites_have() -> None:
     later = {"properties": {"title": "B", "tx_max_change": 2.0, "tx_max_late": 3.0}}
     (layer,) = layer_config({"features": [first, later]})
     assert layer["fieldInfo"]["tx_max_late"]["unit"] == "\u00b0C"
+
+
+def test_layer_config_styles_sites_when_only_a_later_site_has_the_change() -> None:
+    first = {"properties": {"title": "A", "tx_max_baseline": 33.0}}
+    later = {"properties": {"title": "B", "tx_max_change": 2.0}}
+    (layer,) = layer_config({"features": [first, later]})
+    assert layer["visKey"] == "tx_max_change"
+    assert layer["fieldInfo"]["tx_max_baseline"]["unit"] == "\u00b0C"
+
+
+def test_site_legend_names_the_period_of_the_data_source() -> None:
+    crc = {"properties": {"title": "A", "tx_max_change": 1.0, "tx_max_2070_2080": 40.0}}
+    cdt = {
+        "properties": {
+            "title": "A",
+            "tx_max_change": 1.0,
+            "tx_max_ssp585_2070_2090": 40.0,
+        }
+    }
+    (crc_layer,) = layer_config({"features": [crc]})
+    (cdt_layer,) = layer_config({"features": [cdt]})
+    assert crc_layer["title"] == "Hottest day, change to 2070-2080"
+    assert cdt_layer["title"] == "Hottest day, SSP5-8.5 change to 2070-2090"
