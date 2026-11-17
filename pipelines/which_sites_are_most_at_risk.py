@@ -301,6 +301,22 @@ def sites_geojson(
     return {"type": "FeatureCollection", "features": features}
 
 
+def live_map_link(geojson: Path) -> str | None:
+    """Link to the hosted map viewer with every site packed into the #fragment.
+
+    Needs no bundle, only the repository's ``tools/build_map_page.py``.
+    """
+    root = Path(__file__).resolve().parents[1]
+    if not (root / "tools" / "build_map_page.py").is_file():
+        return None
+    sys.path.insert(0, str(root))
+    try:
+        from tools.build_map_page import encode_link
+    except ImportError:
+        return None
+    return encode_link(json.loads(geojson.read_text()))
+
+
 def build_map(output: Path) -> Path | None:
     """Build the crc-viz map page when the repository's map tool and bundle are here.
 
@@ -412,6 +428,9 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
             json.dumps(sites_geojson(sites, crc_open["one_in_10"])),
         )
         page = build_map(args.output)
+        link = live_map_link(args.output / "sites.geojson")
+        if link:
+            print(f"Live map: {link}")
         if page:
             print(
                 f"Map: {page.resolve()} (one self-contained file; open it in a browser)"

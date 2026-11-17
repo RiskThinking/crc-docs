@@ -508,6 +508,22 @@ def build_map(output: Path) -> Path | None:
     )
 
 
+def live_map_link(geojson: Path) -> str | None:
+    """Link to the hosted map viewer with every location packed into the #fragment.
+
+    Needs no bundle, only the repository's ``tools/build_map_page.py``.
+    """
+    root = Path(__file__).resolve().parents[1]
+    if not (root / "tools" / "build_map_page.py").is_file():
+        return None
+    sys.path.insert(0, str(root))
+    try:
+        from tools.build_map_page import encode_link
+    except ImportError:
+        return None
+    return encode_link(json.loads(geojson.read_text()))
+
+
 def headline(brand: str, places: dict, storms: dict, crc: dict, cdt: dict) -> str:
     parts = []
     if places["available"] and storms.get("available"):
@@ -642,6 +658,9 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     print(answer)
     if places["available"]:
         page = build_map(args.output)
+        link = live_map_link(args.output / "locations.geojson")
+        if link:
+            print(f"Live map: {link}")
         if page:
             print(
                 f"Map: {page.resolve()} (one self-contained file; open it in a browser)"
