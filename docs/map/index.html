@@ -1258,6 +1258,20 @@ ${o.prelude.vertexSource}`,define:o.define},defaultProjectionData:B,getProjectio
     const hurricanes = pack.k.find(function (k) { return k.indexOf("hurricanes_within_") === 0; }) || "";
     const kind = hurricanes || pack.k.indexOf("tx_max_change") < 0 ? "hurricanes" : "sites";
     const config = JSON.parse(JSON.stringify(layers[kind]).split("hurricanes_within___hurricanes__").join(hurricanes));
+    if (kind === "sites") {
+      const hazards = {"tx_max": ["Hottest day", "\u00b0C"], "rx1day": ["Wettest day", "mm"], "hot_days": ["Hot days", "days"], "fwi": ["Wildfire weather", "Fire Weather Index"]};
+      const layer = config[0];
+      pack.k.forEach(function (k) {
+        if (layer.fieldInfo[k]) return;
+        Object.keys(hazards).some(function (h) {
+          if (k !== h && k.indexOf(h + "_") !== 0) return false;
+          const label = (hazards[h][0] + " " + k.slice(h.length + 1).replace(/_/g, " ")).trim();
+          layer.fieldInfo[k] = { label: label, unit: hazards[h][1] };
+          layer.tooltip.keyAliases[k] = label;
+          return true;
+        });
+      });
+    }
     const data = { type: "FeatureCollection", features: pack.r.map(function (r) {
       const properties = { city: r[2], title: r[2] };
       pack.k.forEach(function (k, i) { properties[k] = r[3 + i]; });

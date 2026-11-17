@@ -153,6 +153,26 @@ def test_layer_config_labels_cdt_pathway_fields_with_units() -> None:
     assert not any("fwi_ssp" in key for key in info)
 
 
+def test_layer_config_gives_unlisted_hazard_fields_their_unit() -> None:
+    feature = {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [-119.8, 36.8]},
+        "properties": {
+            "tx_max_change": 7.1,
+            "tx_max_historic_2010": 43.4,
+            "hot_days_historic_2010": 44,
+            "rx1day_historic_2010": 50.3,
+            "title": "Fresno",
+        },
+    }
+    (layer,) = layer_config({"type": "FeatureCollection", "features": [feature]})
+    info = layer["fieldInfo"]
+    assert info["tx_max_historic_2010"]["unit"] == "°C"
+    assert info["hot_days_historic_2010"]["unit"] == "days"
+    assert info["rx1day_historic_2010"]["unit"] == "mm"
+    assert "title" not in info
+
+
 def test_sites_geojson_matches_the_map_fields() -> None:
     from pipelines.which_sites_are_most_at_risk import sites_geojson
     from tools.build_map_page import SITE_HAZARDS
@@ -192,3 +212,11 @@ def test_site_title_combines_site_and_city() -> None:
     titles = [f["properties"]["title"] for f in geojson["features"]]
     assert titles == ["Store 12 (Tampa)", "Tampa DC", "Plain"]
     assert [r[2] for r in decode_link(encode_link(geojson))["r"]] == titles
+
+
+def test_hosted_viewer_labels_site_fields_it_only_learns_from_the_link(tmp_path):
+    from tools.build_map_page import build_viewer, find_bundle
+
+    page = build_viewer(find_bundle(download=False), tmp_path).read_text()
+    assert 'const hazards = {"tx_max": ["Hottest day", "\\u00b0C"]' in page
+    assert "layer.fieldInfo[k] = " in page
