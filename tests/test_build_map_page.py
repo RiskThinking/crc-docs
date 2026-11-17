@@ -220,3 +220,10 @@ def test_hosted_viewer_labels_site_fields_it_only_learns_from_the_link(tmp_path)
     page = build_viewer(find_bundle(download=False), tmp_path).read_text()
     assert 'const hazards = {"tx_max": ["Hottest day", "\\u00b0C"]' in page
     assert "layer.fieldInfo[k] = " in page
+
+
+def test_layer_config_labels_hazard_fields_that_only_later_sites_have() -> None:
+    first = {"properties": {"title": "A", "tx_max_change": 1.0}}
+    later = {"properties": {"title": "B", "tx_max_change": 2.0, "tx_max_late": 3.0}}
+    (layer,) = layer_config({"features": [first, later]})
+    assert layer["fieldInfo"]["tx_max_late"]["unit"] == "\u00b0C"
