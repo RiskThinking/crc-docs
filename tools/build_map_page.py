@@ -54,6 +54,12 @@ SITE_HAZARDS = {
     "fwi": ("Wildfire weather", "Fire Weather Index"),
 }
 SITE_WINDOWS = {"2025_2035": "2025-2035", "2070_2080": "2070-2080", "change": "change"}
+# CDT sites (.agents/skills/which-sites-are-most-at-risk): <hazard>_change is the SSP5-8.5
+# change from the historical baseline; <hazard>_baseline, <hazard>_<pathway>_2070_2090 and
+# <hazard>_<pathway>_change are the baseline, the 2070-2090 value and the change per pathway.
+# CDT does not return the Fire Weather Index.
+CDT_PATHWAYS = {"ssp126": "SSP1-2.6", "ssp245": "SSP2-4.5", "ssp585": "SSP5-8.5"}
+CDT_HAZARDS = tuple(h for h in SITE_HAZARDS if h != "fwi")
 HURRICANE_COLOURS = ["#fff7ec", "#fdd49e", "#fc8d59", "#d7301f", "#7f0000"]
 
 PAGE = """<!doctype html>
@@ -189,20 +195,30 @@ def key_aliases(hurricanes: str | None = None) -> dict[str, str]:
     return aliases
 
 
-def site_aliases() -> dict[str, str]:
-    return {
-        f"{hazard}_{window}": f"{name} {label}"
-        for hazard, (name, _) in SITE_HAZARDS.items()
-        for window, label in SITE_WINDOWS.items()
-    }
-
-
 def site_field_info() -> dict[str, dict[str, str]]:
-    return {
+    """Label and unit per site field: CRC Open windows plus CDT pathway changes."""
+    info = {
         f"{hazard}_{window}": {"label": f"{name} {label}", "unit": unit}
         for hazard, (name, unit) in SITE_HAZARDS.items()
         for window, label in SITE_WINDOWS.items()
     }
+    for hazard in CDT_HAZARDS:
+        name, unit = SITE_HAZARDS[hazard]
+        info[f"{hazard}_baseline"] = {"label": f"{name} baseline", "unit": unit}
+        for pathway, label in CDT_PATHWAYS.items():
+            info[f"{hazard}_{pathway}_2070_2090"] = {
+                "label": f"{name} {label} 2070-2090",
+                "unit": unit,
+            }
+            info[f"{hazard}_{pathway}_change"] = {
+                "label": f"{name} {label} change",
+                "unit": unit,
+            }
+    return info
+
+
+def site_aliases() -> dict[str, str]:
+    return {key: info["label"] for key, info in site_field_info().items()}
 
 
 def site_layer() -> dict[str, Any]:

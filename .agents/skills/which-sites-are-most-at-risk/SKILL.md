@@ -58,7 +58,10 @@ Then write `sites.geojson` for the map (see **Map and files** under Route 2): on
 point per site with a `title` property (the site's name, plus its city when known) and numeric properties
 `tx_max_change`, `hot_days_change` and `rx1day_change` (the SSP5-8.5 change from
 the baseline, in °C, days and mm), plus the same for the other pathways as
-`<hazard>_<pathway>_change`. Leave out any value CDT did not return.
+`<hazard>_<pathway>_change`. Every `tx_max` value in the file must be in °C, never
+kelvin: the map labels it °C, so subtract 273.15 from any absolute CDT `tx_max`
+before writing it (a change needs no conversion, since 1 K equals 1 °C). Leave out
+any value CDT did not return.
 
 ### Route 2: CRC Open, when you can run Python with internet access
 

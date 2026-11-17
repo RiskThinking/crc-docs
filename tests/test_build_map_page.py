@@ -134,6 +134,25 @@ def test_layer_config_colours_sites_by_hottest_day_change() -> None:
     assert layer["fieldInfo"]["rx1day_change"]["unit"] == "mm"
 
 
+def test_layer_config_labels_cdt_pathway_fields_with_units() -> None:
+    (layer,) = layer_config(SITES_GEOJSON)
+    info = layer["fieldInfo"]
+    assert info["tx_max_ssp126_change"] == {
+        "label": "Hottest day SSP1-2.6 change",
+        "unit": "°C",
+    }
+    assert info["hot_days_ssp585_change"]["unit"] == "days"
+    assert info["tx_max_baseline"]["label"] == "Hottest day baseline"
+    assert info["rx1day_ssp245_2070_2090"] == {
+        "label": "Wettest day SSP2-4.5 2070-2090",
+        "unit": "mm",
+    }
+    assert layer["tooltip"]["keyAliases"]["rx1day_ssp245_change"] == (
+        "Wettest day SSP2-4.5 change"
+    )
+    assert not any("fwi_ssp" in key for key in info)
+
+
 def test_sites_geojson_matches_the_map_fields() -> None:
     from pipelines.which_sites_are_most_at_risk import sites_geojson
     from tools.build_map_page import SITE_HAZARDS
