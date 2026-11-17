@@ -132,6 +132,20 @@ VIEWER_BOOT = """  const hint = document.getElementById("fallback");
     const hurricanes = pack.k.find(function (k) {{ return k.indexOf("hurricanes_within_") === 0; }}) || "";
     const kind = hurricanes || pack.k.indexOf("tx_max_change") < 0 ? "hurricanes" : "sites";
     const config = JSON.parse(JSON.stringify(layers[kind]).split("{placeholder}").join(hurricanes));
+    if (kind === "sites") {{
+      const hazards = {hazards};
+      const layer = config[0];
+      pack.k.forEach(function (k) {{
+        if (layer.fieldInfo[k]) return;
+        Object.keys(hazards).some(function (h) {{
+          if (k !== h && k.indexOf(h + "_") !== 0) return false;
+          const label = (hazards[h][0] + " " + k.slice(h.length + 1).replace(/_/g, " ")).trim();
+          layer.fieldInfo[k] = {{ label: label, unit: hazards[h][1] }};
+          layer.tooltip.keyAliases[k] = label;
+          return true;
+        }});
+      }});
+    }}
     const data = {{ type: "FeatureCollection", features: pack.r.map(function (r) {{
       const properties = {{ city: r[2], title: r[2] }};
       pack.k.forEach(function (k, i) {{ properties[k] = r[3 + i]; }});
@@ -217,23 +231,47 @@ def site_field_info() -> dict[str, dict[str, str]]:
     return info
 
 
+def extra_site_field_info(props: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """Units for site fields the fixed list misses (e.g. ``tx_max_historic_2010``).
+
+    crc-viz falls back to its own unit for a field with no ``fieldInfo`` entry, and
+    that unit for ``tx_max`` is K. Any numeric field named after a site hazard gets
+    that hazard's unit here, so the map never shows K for values written in °C.
+    """
+    known = site_field_info()
+    extra = {}
+    for key, value in props.items():
+        if key in known or not isinstance(value, (int, float)):
+            continue
+        for hazard, (name, unit) in SITE_HAZARDS.items():
+            if key == hazard or key.startswith(f"{hazard}_"):
+                rest = key[len(hazard) + 1 :].replace("_", " ")
+                extra[key] = {"label": f"{name} {rest}".strip(), "unit": unit}
+                break
+    return extra
+
+
 def site_aliases() -> dict[str, str]:
     return {key: info["label"] for key, info in site_field_info().items()}
 
 
-def site_layer() -> dict[str, Any]:
+def site_layer(props: dict[str, Any] | None = None) -> dict[str, Any]:
     """Colour sites by how much the hottest day warms; every other field is selectable."""
+    extra = extra_site_field_info(props or {})
     return {
         "id": "points",
         "visKey": "tx_max_change",
         "title": "Hottest day, change to 2070-2080",
         "unit": "°C",
-        "fieldInfo": site_field_info(),
+        "fieldInfo": {**site_field_info(), **extra},
         "radius": 8,
         "tooltip": {
             "titleKey": "title",
             "valueKeys": [f"{h}_change" for h in SITE_HAZARDS],
-            "keyAliases": site_aliases(),
+            "keyAliases": {
+                **site_aliases(),
+                **{k: v["label"] for k, v in extra.items()},
+            },
         },
     }
 
@@ -255,7 +293,7 @@ def layer_config(geojson: dict[str, Any]) -> list[dict[str, Any]]:
     props = features[0].get("properties", {}) if features else {}
     hurricanes = next((k for k in props if k.startswith("hurricanes_within_")), None)
     if "tx_max_change" in props and not hurricanes:
-        return [site_layer()]
+        return [site_layer(props)]
     if hurricanes:
         return [
             {
@@ -400,7 +438,8 @@ def build_viewer(viz: Path, output: Path) -> Path:
             indent=2,
         ),
         boot=VIEWER_BOOT.format(
-            placeholder="hurricanes_within_" + HURRICANE_PLACEHOLDER
+            placeholder="hurricanes_within_" + HURRICANE_PLACEHOLDER,
+            hazards=json.dumps(SITE_HAZARDS),
         ),
     )
     output.mkdir(parents=True, exist_ok=True)

@@ -11,7 +11,7 @@ one chart when the host can draw it, and one line on how sure we are. Avoid
 jargon; when a term is unavoidable, explain it in a few words.
 
 Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2406-crc-docs-add-map-visualization-for-which-sites-are/.agents/skills/which-sites-are-most-at-risk/SKILL.md`.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/which-sites-are-most-at-risk/SKILL.md`.
 If you can fetch it and it differs from this copy, follow the fetched one,
 unless you are inside a checkout of the crc-docs repository: then this copy and
 the repository's own `pipelines/` and `tools/` are newer than the published
