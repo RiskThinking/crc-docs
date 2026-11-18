@@ -6,6 +6,8 @@ Conventions: return period RP means a value with probability 1/RP of being reach
 
 ## Questions
 
+Open the matching skill before answering. The company and sites skills must hand over a live map link, a map file and a GeoJSON file; their pipelines print all three.
+
 - [How hot will the hottest day get?](.agents/skills/how-hot-will-it-get/SKILL.md): tx_max; NOAA GHCNh station vs CRC Open vs CDT. Notebook: notebooks/how_hot_will_it_get.ipynb. Pipeline: pipelines/how_hot_will_it_get.py
 - [How hard will it rain?](.agents/skills/how-hard-will-it-rain/SKILL.md): rx1day; ERA5 vs CRC Open vs CDT. Notebook: notebooks/how_hard_will_it_rain.ipynb. Pipeline: pipelines/how_hard_will_it_rain.py
 - [Which of my sites are most at risk?](.agents/skills/which-sites-are-most-at-risk/SKILL.md): tx_max, rx1day, hot_days, fwi for a site list. Notebook: notebooks/which_sites_are_most_at_risk.ipynb. Pipeline: pipelines/which_sites_are_most_at_risk.py
