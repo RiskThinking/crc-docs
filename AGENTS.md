@@ -25,6 +25,13 @@ then the Colab notebook. Hosts without repository access can fetch a skill from
 `https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/<name>/SKILL.md`.
 CI also packages every skill as an uploadable zip (`tools/package_skills.py`).
 
+**Always open the matching `SKILL.md` before answering, even when the request
+only names this repository and a route ("use CRC Open").** The company and
+sites skills must end with three map outputs the person can use: the full
+`Live map:` link, the `index.html` map file and the GeoJSON. Both pipelines print
+them under `Live map:`, `Map:` and `GeoJSON:`; pass all three on as links or
+files, never from memory.
+
 ## Layout
 
 - `notebooks/<question>.ipynb`: the explained answer, A → B → C, with saved
@@ -32,7 +39,7 @@ CI also packages every skill as an uploadable zip (`tools/package_skills.py`).
   concepts.
 - `notebooks/sources/`: tours of individual public data sources.
 - `pipelines/<question>.py`: the headless answer; writes `summary.json`
-  (the company pipeline also writes `locations.geojson` for the crc-viz map).
+  (the company and sites pipelines also write `locations.geojson` / `sites.geojson` for the crc-viz map and print the live map link).
   Other files in `pipelines/` back the source notebooks.
 - `tools/build_map_page.py`: turns `locations.geojson` into one self-contained HTML file on the
   crc-viz hazard map (bundle built from the npm package in `tools/crc-viz-bundle`; see its docstring).

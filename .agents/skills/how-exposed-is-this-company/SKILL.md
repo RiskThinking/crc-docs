@@ -114,7 +114,8 @@ python build_map_page.py pipeline_output/company/locations.geojson \
 writes the page and prints `Live map:` and `Map:` lines. If either line is
 missing from its output, run the commands above yourself before answering. The
 live link is very long: copy it from the output without editing, never
-truncate it, and if it is cut off, print it again with `--link`.)
+truncate it, and if it is cut off, read it from `live_map_link.txt` next to the
+GeoJSON, or attach `live_map.html`, which opens the map when opened in a browser.)
 
 **Always deliver all three map outputs whenever you have locations to map, on any
 data route, without being asked.** The person should never have to request the map, the file or the data:
@@ -136,11 +137,20 @@ data route, without being asked.** The person should never have to request the m
    damage fields) as a second file to download, and say it also opens in QGIS,
    geojson.io or Kepler.gl.
 
-If you run in a sandbox or chat host that can attach files (for example an
-outputs or downloads folder, or an artifact/file-sharing tool), copy
-`index.html` and `locations.geojson` there, named after the brand (for example
-`walmart-fl-map.html`, `walmart-fl-locations.geojson`), so they appear as
-downloads. Otherwise give each file's full absolute path. If you cannot run the
+The live map link is the one link you do write, and it must be in the answer text, never only in an attached file: the pipeline prints it as a ready-made `- [Open the live map](...)` line; paste that line unchanged as the first bullet of the **Map and files** list.
+
+If you run in a sandbox, the pipeline copies the map file and the GeoJSON into
+the chat's downloads folder (`/mnt/data` in ChatGPT, `/mnt/user-data/outputs` in
+Claude) and prints a `Download file:` line for each. The chat then shows each
+one as its own download button. **Do not write a link for these files**: a
+markdown link to a file path, including `sandbox:/mnt/data/...`, opens the
+sandbox instead of downloading. Name each file in plain text with one short
+description (for example "warehouses-map.html: opens in Chrome, Safari or
+Firefox; needs internet for the basemap") and say the download buttons are
+below. If a command above ran without the pipeline, copy the two files into that
+folder yourself with descriptive names (for example `walmart-fl-map.html`, `walmart-fl-locations.geojson`). If there is
+no downloads folder and you cannot attach files, say so in one sentence, rely on
+the live map link and give the paths as plain text. If you cannot run the
 script, say so and still give the path to `locations.geojson`. Never claim a map
 was shown or a file was provided if it was not.
 
