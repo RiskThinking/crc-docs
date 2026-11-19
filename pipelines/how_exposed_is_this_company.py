@@ -33,12 +33,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import importlib.util
 import json
 import os
 import shutil
 import sys
 import tempfile
+import time
 import urllib.request
 from datetime import UTC, datetime
 from itertools import pairwise
@@ -48,6 +50,7 @@ from typing import Any
 import duckdb
 import numpy as np
 import pyarrow as pa
+import pyarrow.parquet as pq
 import shapely
 from crc_framework import (
     BuiltinImpact,
@@ -76,6 +79,7 @@ OVERTURE_CATALOG = "https://stac.overturemaps.org/catalog.json"
 # None of these models can be bound inside a crc-sdk 1.0 evaluation, so the
 # pipeline resolves each one with its context and takes its expectation over
 # the hazard curve itself.
+CATALOG_MAX_AGE = 24 * 3600  # seconds: how long "latest release" is reused
 HAZARDS = {
     "cyclone": ("hurricane wind", BuiltinImpact.CYCLONE),
     "rx1day": ("heavy rain", BuiltinImpact.MAXIMUM_DAILY_PRECIPITATION),
@@ -119,26 +123,53 @@ MORE_DATA = "mailto:opensource@riskthinking.ai"
 TRIAL = "https://velo.riskthinking.ai/cdt-express"
 
 
-def read_json(url: str) -> dict[str, Any]:
+def read_json(
+    url: str, cache: Path | None = None, max_age: float | None = None
+) -> dict[str, Any]:
+    """Fetch JSON, reusing a copy in ``cache`` younger than ``max_age`` seconds.
+
+    ``max_age=None`` keeps a cached copy forever (for files of a fixed release).
+    """
+    path = None
+    if cache is not None:
+        path = (
+            cache / "stac" / (hashlib.sha256(url.encode()).hexdigest()[:16] + ".json")
+        )
+        if path.is_file() and (
+            max_age is None or time.time() - path.stat().st_mtime < max_age
+        ):
+            try:
+                return json.loads(path.read_text())
+            except ValueError:  # a damaged cache file: fetch it again
+                pass
     with urllib.request.urlopen(url, timeout=60) as response:
-        return json.load(response)
+        data = json.load(response)
+    if path is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_atomic(path, json.dumps(data))
+    return data
 
 
 def sql_text(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def overture_files(bounds: tuple[float, float, float, float]) -> tuple[str, list[str]]:
-    """Return the latest Overture release and the Places files covering bounds."""
-    release = str(read_json(OVERTURE_CATALOG)["latest"])
+def overture_files(
+    bounds: tuple[float, float, float, float], cache: Path | None = None
+) -> tuple[str, list[str]]:
+    """Return the latest Overture release and the Places files covering bounds.
+
+    The catalog's ``latest`` is cached for a day; each release's files never change.
+    """
+    release = str(read_json(OVERTURE_CATALOG, cache, CATALOG_MAX_AGE)["latest"])
     collection = read_json(
-        f"https://stac.overturemaps.org/{release}/places/place/collection.json"
+        f"https://stac.overturemaps.org/{release}/places/place/collection.json", cache
     )
     files = []
     for link in collection["links"]:
         if link.get("rel") != "item":
             continue
-        item = read_json(link["href"])
+        item = read_json(link["href"], cache)
         west, south, east, north = item["bbox"]
         if not (
             east < bounds[0]
@@ -155,11 +186,27 @@ def find_locations(
     bounds: tuple[float, float, float, float],
     region: str | None,
     categories: list[str] | None,
+    cache: Path | None = None,
 ) -> dict[str, Any]:
     """Places whose Overture brand name matches ``brand`` inside ``bounds``."""
-    release, files = overture_files(bounds)
+    release, files = overture_files(bounds, cache)
     if not files:
         return {"available": False, "reason": "no Overture Places files cover the area"}
+    key = json.dumps(
+        [release, brand.lower(), list(bounds), region, sorted(categories or [])]
+    )
+    cached = (
+        cache / "places" / (hashlib.sha256(key.encode()).hexdigest()[:16] + ".parquet")
+        if cache is not None
+        else None
+    )
+    if cached is not None and cached.is_file():
+        try:
+            table = pq.read_table(cached)
+        except (OSError, pa.ArrowInvalid):  # a damaged cache file: query again
+            table = None
+        if table is not None:
+            return places_result(table, release, brand)
     conditions = [
         "bbox.xmin BETWEEN ? AND ?",
         "bbox.ymin BETWEEN ? AND ?",
@@ -188,6 +235,15 @@ def find_locations(
             """,
             parameters,
         ).to_arrow_table()
+    if cached is not None and table.num_rows:
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        temporary = cached.with_suffix(".tmp")
+        pq.write_table(table, temporary)
+        os.replace(temporary, cached)
+    return places_result(table, release, brand)
+
+
+def places_result(table: pa.Table, release: str, brand: str) -> dict[str, Any]:
     if table.num_rows == 0:
         return {"available": False, "reason": f"no Overture places for brand {brand!r}"}
     return {
@@ -230,7 +286,7 @@ def hurricane_tracks(
     table = observations.table
     points = shapely.from_wkb(table["geometry"].to_numpy(zero_copy_only=False))
     storms: dict[str, list[tuple[str, float, float, float]]] = {}
-    for sid, time, lat, lon, wind in zip(
+    for sid, when, lat, lon, wind in zip(
         table["group_id"].to_pylist(),
         table["time"].to_pylist(),
         shapely.get_y(points),
@@ -239,7 +295,7 @@ def hurricane_tracks(
         strict=True,
     ):
         if wind is not None:
-            storms.setdefault(sid, []).append((time, float(lat), float(lon), wind))
+            storms.setdefault(sid, []).append((when, float(lat), float(lon), wind))
     steps = np.linspace(0, 1, 8, endpoint=False)
     ids, lats, lons = [], [], []
     for sid, track in storms.items():
@@ -780,7 +836,13 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     args.output.mkdir(parents=True, exist_ok=True)
     runtime = Runtime(cache=Cache.reuse(source_cache(args.output)))
 
-    places = find_locations(args.brand, bounds, args.region, args.category)
+    places = find_locations(
+        args.brand,
+        bounds,
+        args.region,
+        args.category,
+        source_cache(args.output),
+    )
     storms: dict[str, Any] = {"available": False, "reason": "skipped"}
     crc: dict[str, Any] = {"available": False, "reason": "no locations"}
     if places["available"]:
