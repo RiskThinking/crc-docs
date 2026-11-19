@@ -30,12 +30,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import importlib.util
 import json
 import os
 import shutil
 import sys
 import tempfile
+import time
 import urllib.request
 import warnings
 from datetime import UTC, datetime
@@ -52,6 +54,7 @@ from crc_sdk.workflows import HazardDataset, IBTrACSPlan, ImpactContextColumns
 
 FLORIDA = (-87.7, 24.4, -79.9, 31.1)
 OVERTURE_CATALOG = "https://stac.overturemaps.org/catalog.json"
+CATALOG_MAX_AGE = 24 * 3600  # seconds: how long "latest release" is reused
 HAZARDS = {
     "cyclone": "hurricane wind",
     "rx1day": "heavy rain",
@@ -92,22 +95,49 @@ MORE_DATA = "mailto:opensource@riskthinking.ai"
 TRIAL = "https://velo.riskthinking.ai/cdt-express"
 
 
-def read_json(url: str) -> dict[str, Any]:
+def read_json(
+    url: str, cache: Path | None = None, max_age: float | None = None
+) -> dict[str, Any]:
+    """Fetch JSON, reusing a copy in ``cache`` younger than ``max_age`` seconds.
+
+    ``max_age=None`` keeps a cached copy forever (for files of a fixed release).
+    """
+    path = None
+    if cache is not None:
+        path = (
+            cache / "stac" / (hashlib.sha256(url.encode()).hexdigest()[:16] + ".json")
+        )
+        if path.is_file() and (
+            max_age is None or time.time() - path.stat().st_mtime < max_age
+        ):
+            try:
+                return json.loads(path.read_text())
+            except ValueError:  # a damaged cache file: fetch it again
+                pass
     with urllib.request.urlopen(url, timeout=60) as response:
-        return json.load(response)
+        data = json.load(response)
+    if path is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_atomic(path, json.dumps(data))
+    return data
 
 
-def overture_files(bounds: tuple[float, float, float, float]) -> tuple[str, list[str]]:
-    """Return the latest Overture release and the Places files covering bounds."""
-    release = str(read_json(OVERTURE_CATALOG)["latest"])
+def overture_files(
+    bounds: tuple[float, float, float, float], cache: Path | None = None
+) -> tuple[str, list[str]]:
+    """Return the latest Overture release and the Places files covering bounds.
+
+    The catalog's ``latest`` is cached for a day; each release's files never change.
+    """
+    release = str(read_json(OVERTURE_CATALOG, cache, CATALOG_MAX_AGE)["latest"])
     collection = read_json(
-        f"https://stac.overturemaps.org/{release}/places/place/collection.json"
+        f"https://stac.overturemaps.org/{release}/places/place/collection.json", cache
     )
     files = []
     for link in collection["links"]:
         if link.get("rel") != "item":
             continue
-        item = read_json(link["href"])
+        item = read_json(link["href"], cache)
         west, south, east, north = item["bbox"]
         if not (
             east < bounds[0]
@@ -127,16 +157,33 @@ def find_locations(
     cache: Path,
 ) -> dict[str, Any]:
     """Places whose Overture brand name matches ``brand`` inside ``bounds``."""
-    release, files = overture_files(bounds)
+    release, files = overture_files(bounds, cache)
     if not files:
         return {"available": False, "reason": "no Overture Places files cover the area"}
+    key = json.dumps(
+        [release, brand.lower(), list(bounds), region, sorted(categories or [])]
+    )
+    cached = (
+        cache / "places" / (hashlib.sha256(key.encode()).hexdigest()[:16] + ".parquet")
+    )
+    if cached.is_file():
+        try:
+            table = pq.read_table(cached)
+        except (OSError, pa.ArrowInvalid):  # a damaged cache file: query again
+            table = None
+        if table is not None:
+            return places_result(table, release, brand)
     conditions = [
         f"bbox.xmin BETWEEN {bounds[0]} AND {bounds[2]}",
         f"bbox.ymin BETWEEN {bounds[1]} AND {bounds[3]}",
         f"lower(brand.names.primary) = lower({sql_quote(brand)})",
     ]
     if region:
-        conditions.append(f"addresses[1].region = {sql_quote(region)}")
+        # Releases before 2026-11-18 write "FL"; newer ones write "US-FL".
+        conditions.append(
+            f"(addresses[1].region = {sql_quote(region)} "
+            f"OR addresses[1].region LIKE {sql_quote('%-' + region)})"
+        )
     if categories:
         conditions.append(
             "basic_category IN (" + ", ".join(sql_quote(c) for c in categories) + ")"
@@ -152,6 +199,15 @@ def find_locations(
         ORDER BY id
         """
     ).to_arrow_table()
+    if table.num_rows:
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        temporary = cached.with_suffix(".tmp")
+        pq.write_table(table, temporary)
+        os.replace(temporary, cached)
+    return places_result(table, release, brand)
+
+
+def places_result(table: pa.Table, release: str, brand: str) -> dict[str, Any]:
     if table.num_rows == 0:
         return {"available": False, "reason": f"no Overture places for brand {brand!r}"}
     return {
