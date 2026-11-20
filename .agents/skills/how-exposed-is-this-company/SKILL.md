@@ -5,85 +5,73 @@ description: Tells investors, lenders and analysts how exposed a listed company 
 
 # How exposed is this company?
 
-Use the revision requested by the user for this skill and its chart helper. In a
-matching crc-docs checkout, use its local copies. For a URL-only run with no revision
-specified, the published copy is
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/how-exposed-is-this-company/SKILL.md`.
+Every raw URL below points at the branch `plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by`: use it for this
+skill, the pipeline, the map builder and the chart helper. If the user names a
+different revision, swap it into those URLs; in a matching crc-docs checkout,
+use the local copies. This skill's file is
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/.agents/skills/how-exposed-is-this-company/SKILL.md`.
 
-If a branch or revision is named, use that same revision for every download in
-this skill (the pipeline, the map builder and the chart helper): replace `main`
-in the raw URLs below with it.
-
-The reader may not be an expert. Plain words, no jargon, no invented numbers.
+The reader may not be an expert: plain words, no jargon, no invented numbers.
 Never ask for identifiers or technical options.
 
 ## Output: four sections, always in this order
 
 1. **Interpretation**: one headline sentence, then at most three short bullets
-   (what the numbers mean, how it grows, how it compares). Name the data route
-   used.
+   (what the numbers mean, how it grows, how it compares). Name the data route.
 2. **Table**: one row per metric or hazard; one column per future and horizon
    (or period).
 3. **Chart**: a grouped column chart, one group per category.
-   - Route 1: categories are the two futures, SSP2-4.5 and SSP5-8.5; each group
-     has three bars, the horizons 2030, 2050 and 2090, showing expected impact
-     (% of asset value).
-   - Route 2: categories are wind, rain, heat and total; bars are 2023-2036 and
+   - Route 1: groups are SSP2-4.5 and SSP5-8.5; three bars each, the horizons
+     2030, 2050, 2090, showing expected impact (% of asset value).
+   - Route 2: groups are wind, rain, heat, total; two bars each, 2023-2036 and
      2068-2081 expected yearly damage (% of building value).
-   Use exactly these hex colours, light to dark (later is darker): Route 1's
-   three bars `#fa9b75`, `#ef3b2c`, `#a50f15`; Route 2's two bars `#fa9b75`,
-   `#cb181d`. No other colours.
-   Label axes with units and title the chart with the company. The reader must
-   see the bars directly under **Chart** in the final reply with tool activity
-   collapsed. Display it at the full available width of the chat column as a
-   static, non-interactive image: never a small thumbnail or a link in place of
-   the chart. Draw it wide (for example 12 x 5 inches at 120 dpi, which also keeps
-   the PNG under the helper's size limit), with readable labels and minimal outer
-   margins. If the client caps inline image width, use the largest size it
-   supports and do not claim the chart fills the column unless you verified it.
-   Select the delivery method by the client's rendering capabilities.
 
-   - When the client supports Work Mode final-answer visualization references,
-     use this run's chart PNG, drawing it once with matplotlib if needed. From
-     the skill folder run the following command with the actual PNG path and a
-     short description of its metric and units:
+   Use exactly these hex colours, light to dark: Route 1 `#fa9b75`, `#ef3b2c`,
+   `#a50f15`; Route 2 `#fa9b75`, `#cb181d`. No other colours. Label axes with
+   units and title the chart with the company. Draw it wide (e.g. 12 x 5 inches
+   at 120 dpi), with readable labels and minimal margins.
+
+   The reader must see the bars directly under **Chart** in the final reply, with
+   tool activity collapsed, as a static image at the full width of the chat
+   column: never a thumbnail, a file name or a link instead. Choose the method by
+   what the client supports:
+   - **ChatGPT Work Mode:** use this run's chart PNG (draw it with matplotlib if
+     needed) and run, from the skill folder (for a URL-only run, download the
+     helper from the same directory and revision):
 
          python3 scripts/prepare_inline_chart.py "$chart_png" --alt "$chart_description"
 
-     In a checkout, the helper is beside this SKILL.md under `scripts/`. For a
-     URL-only run, download the helper from that same directory and revision.
-     Copy the one line it prints verbatim under **Chart** in the FINAL reply,
-     on its own line, outside a code block. The line embeds the original PNG.
-     A tool preview validates the image during execution only. If the helper
-     reports that the image is too large, export the same plot as a smaller PNG.
-   - On a client with a different inline chart or image renderer, use its
-     supported final-message format. When the renderer supports the required
-     grouped columns, units and colours, the chart can be drawn there directly.
-   - If the client exposes no inline renderer, or rendering cannot be prepared,
-     say so in the Chart section and retain the metric table. In either case,
-     add one **Open the chart** link below the chart or fallback message when
-     the host provides a verified, user-accessible PNG attachment from this run.
-4. **Map and files** (only when you have locations; see Map below):
-   - the live map link, as the first bullet;
-   - <name>-map.html: <short description>, plain text;
-   - <name>-locations.geojson: <short description>, plain text.
-   The live map is the only link in this block: no links or backticks on the
-   file names. Then attach both files as download cards, shown after your closing
+     `$chart_description` is a short description of the metric and units. Copy
+     the one line it prints verbatim under **Chart** in the FINAL reply, on its
+     own line, outside a code block. A tool preview does not count. If it says
+     the image is too large, export a smaller PNG.
+   - **Another client with an inline chart or image renderer:** use its
+     final-message format.
+   - **No inline renderer, or it fails:** say so in the Chart section and keep
+     the table. Add one **Open the chart** link when the host provides a verified
+     PNG attachment from this run.
+4. **Map and files** (only when you have locations; see Map):
+   - the live map link, first bullet (see Map);
+   - `<name>-map.html: <short description>`, plain text;
+   - `<name>-locations.geojson: <short description>`, plain text.
+
+   The live map is the only link in this block: no links or backticks on the file
+   names. Then attach both files as download cards, shown after your closing
    lines (write nothing after them). Copy this run's files into the downloads
-   folder under fresh descriptive names (e.g. `apple-fl-map.html`) and attach
-   those, never an earlier copy or a `chatgpt.com/library` URL.
+   folder (`/mnt/data` in ChatGPT, `/mnt/user-data/outputs` in Claude; the
+   pipeline does this and prints `Download file:` lines) under fresh descriptive
+   names (e.g. `apple-fl-map.html`) and attach those, never an earlier copy or a
+   `chatgpt.com/library` URL. With no downloads folder, give plain-text paths
+   and rely on the live link. Never claim a file was provided if it was not.
 
 Close the text with two short lines: **How sure are we** (scores depend on which
 assets are known and on damage functions, so they suit comparing companies and
 futures; Route 2 uses an open map of one area's locations with equal values, not
 the company's asset register) and **Next step** (see each route).
 
-**Before you send, check both.** If one fails, fix it first:
-1. The bars are visible directly under Chart in the final reply, shown by the
-   helper's printed line or the host's inline renderer. A file name or card for
-   the PNG is not enough.
-2. If map files exist, both are attached as download cards (on clients that
-   can attach files).
+**Before you send, check both:** the bars are visible under Chart (the helper's
+line or the host's renderer; a file name or card is not enough), and, if map
+files exist, both are attached as download cards.
 
 ## Step 1: find the company
 
@@ -92,11 +80,13 @@ or ticker is fine." For an index or list, compare the companies instead.
 
 ## Step 2: get the data
 
-If the person names a route ("use CRC Open", "use the free data", "use CDT"),
-use it even when another is available. Otherwise use the first that works:
-Route 1, then 2, then 3. Say which you used. If they ask for CRC Open and you
-cannot run Python with internet, say so in one line and stop: never switch to
-CDT, and never label CDT figures as CRC Open.
+If the person names a route ("use CRC Open", "use the free data", "use CDT"), use
+it even when another is available. Otherwise use the first that works: Route 1,
+then 2, then 3. Say which you used. Call a route unavailable only after trying
+it: for CRC Open, run the install and the script before saying it cannot run. If
+a download is blocked, name the host and give the allowlist under Route 3. If
+they asked for CRC Open and it truly cannot run, say why in one line and stop:
+never switch to CDT, and never label CDT figures as CRC Open.
 
 ### Route 1: CDT (when `search_companies` and related CDT Express tools exist)
 
@@ -110,8 +100,7 @@ CDT, and never label CDT figures as CRC Open.
    `get_market_index_companies_climate_scores` with `pathway: "ssp585"`,
    `horizon: "2050"`, the same metrics, `sort_by: "expected_impact"`. Report the
    company's rank.
-4. Prepare the chart PNG now (see Output section 3); show it once, in the
-   final reply.
+4. Prepare the chart PNG (Output section 3); show it once, in the final reply.
 5. Map: if `get_company_assets` returns coordinates, write them as
    `locations.geojson` (one point per asset, scores as numeric properties, a
    `name` or `city` property) and follow Map. No coordinates means no map: say so.
@@ -125,10 +114,12 @@ Next step: offer other companies, the riskiest assets, or other futures.
 
 ### Route 2: CRC Open (when you can run Python with internet)
 
-Free data for one high-emissions future (SSP5-8.5), one area. It finds the
-brand's locations on the open Overture map, counts past hurricanes within 50 km
-(North Atlantic only) and estimates expected yearly damage from hurricane wind,
-heavy rain and hot days.
+Free data for one high-emissions future (SSP5-8.5), one area: the brand's
+locations on the open Overture map, past hurricanes within 50 km (North Atlantic
+only) and expected yearly damage from hurricane wind, heavy rain and hot days.
+CRC Open is open source: it needs no account, API key or connector, and it does
+not use CDT. A rejected or missing CDT connection says nothing about it. If a
+browser tool cannot fetch GitHub, download with `curl` in a shell instead.
 
 1. Pick the area (the one asked, else the company's home state or region). Work
    out its bounding box `W S E N` and two-letter region code, and show them.
@@ -141,25 +132,23 @@ heavy rain and hot days.
 ```sh
 python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a3,<2"
 curl -fsSL -o how_exposed_is_this_company.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_exposed_is_this_company.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/pipelines/how_exposed_is_this_company.py
 python how_exposed_is_this_company.py --brand "BRAND" --bounds W S E N --region XX --skip-cdt
 ```
 
-   The Overture query alone can take about two minutes, longer than some
-   sandboxes allow a single command. Run it in the background
+   The Overture query can take about two minutes, longer than some sandboxes
+   allow one command. Run it in the background
    (`nohup python ... > run.log 2>&1 &`), check `run.log` every 20 seconds until
    the process has exited, then read `summary.json` and the printed lines (the
    `GeoJSON:` line alone is not a completion signal: a run with no places never
-   prints it). Keep the same `--output` folder so retries
-   reuse the cached locations. If it still fails, say it failed and why; never
-   quote numbers from a run you did not just complete. If no places are found, try other
-   spellings of the brand.
+   prints it). Keep the same `--output` folder so retries reuse the cached
+   locations. If it still fails, say so and why; never quote numbers from a run
+   you did not just complete. If no places are found, try other spellings.
 3. Read `pipeline_output/company/summary.json`: `answer` is the headline;
    `a_public.hurricanes` is the share of locations with a hurricane within 50 km;
    `b_crc_open.average_expected_damage_pct` is the average location's expected
    yearly damage (% of building value) by hazard for 2023–2036 (`early`) and 2068–2081 (`late`).
-4. Prepare the chart PNG now (see Output section 3); show it once, in the
-   final reply.
+4. Prepare the chart PNG (Output section 3); show it once, in the final reply.
 5. Say the data has no historical baseline and covers SSP5-8.5 only; other
    futures: opensource@riskthinking.ai.
 
@@ -173,7 +162,7 @@ Do not estimate or recall numbers. In two sentences say what the analysis would
 show, then offer:
 
 - **Free:** the
-  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/how_exposed_is_this_company.ipynb)
+  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/notebooks/how_exposed_is_this_company.ipynb)
   (edit `BRAND`, `AREA`, `REGION` in the first cell, then Runtime → Run all).
 - **Whole company, every future:** connect CDT Express, a custom connector
   named **CDT Express** at `https://mcp.riskthinking.ai/mcp` (Claude: Customize →
@@ -186,15 +175,15 @@ If downloads fail, the sandbox likely blocks the network: ask to allow
 `stac.overturemaps.org`, `overturemaps-us-west-2.s3.amazonaws.com`,
 `www.ncei.noaa.gov`, or use Route 3.
 
-## Map (every route with locations; deliver all three without being asked)
+## Map (every route with locations; deliver it without being asked)
 
-The pipeline already builds these and prints `Live map:`, `Map:` and
+The pipeline already builds the map and prints `Live map:`, `Map:` and
 `GeoJSON:` lines. If a line is missing, or the data came from Route 1, run
 (inside a checkout use `tools/build_map_page.py`):
 
 ```sh
 curl -fsSL -o build_map_page.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/tools/build_map_page.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/tools/build_map_page.py
 python build_map_page.py pipeline_output/company/locations.geojson --link
 python build_map_page.py pipeline_output/company/locations.geojson \
   --output pipeline_output/company/map
@@ -203,22 +192,16 @@ python build_map_page.py pipeline_output/company/locations.geojson \
 Always use this script, never a map of your own; keep its Settings control
 overlaid top-right (`controlsPlacement: "overlay-top-right"`).
 
-1. **Live link.** Paste the pipeline's `- [Open the live map](...)` line
-   unchanged as the first bullet of **Map and files**, in the answer text. Never
-   shorten, retype or truncate it; if cut off, read `live_map_link.txt` next to
-   the GeoJSON or attach `live_map.html`. Do not start a server or embed the map
-   in the chat: it only works in a browser tab.
-2. **Map file.** `pipeline_output/company/map/index.html` (about 3 MB): opens in
-   Chrome, Safari or Firefox; needs internet for the basemap.
-3. **GeoJSON.** `pipeline_output/company/locations.geojson`: one point per
-   location with hurricane counts and expected-damage fields; also opens in
-   QGIS, geojson.io or Kepler.gl.
-
-In a sandbox the pipeline copies the files to the downloads folder (`/mnt/data` in
-ChatGPT, `/mnt/user-data/outputs` in Claude) and prints a `Download file:` line
-for each. Without the pipeline, copy them there yourself. With no downloads
-folder, give plain-text paths and rely on the live link. Never claim a map or
-file was provided if it was not.
+- **Live link:** paste the pipeline's `- [Open the live map](...)` line unchanged
+  as the first bullet of **Map and files**, in the answer text. Never shorten,
+  retype or truncate it; if cut off, read `live_map_link.txt` next to the GeoJSON
+  or attach `live_map.html`. Do not start a server or embed the map in the chat:
+  it only works in a browser tab.
+- **Map file:** `pipeline_output/company/map/index.html` (about 3 MB); opens in
+  Chrome, Safari or Firefox and needs internet for the basemap.
+- **GeoJSON:** `pipeline_output/company/locations.geojson`, one point per
+  location with hurricane counts and expected-damage fields; also opens in QGIS,
+  geojson.io or Kepler.gl.
 
 ## Rules
 
