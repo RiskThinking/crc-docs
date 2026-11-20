@@ -5,9 +5,14 @@ description: Tells investors, lenders and analysts how exposed a listed company 
 
 # How exposed is this company?
 
-Latest version: `https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/how-exposed-is-this-company/SKILL.md`.
-If it differs from this copy, follow the fetched one, unless you are inside a
-crc-docs checkout: then this copy and the repo's `pipelines/` and `tools/` win.
+Use the revision requested by the user for this skill and its chart helper. In a
+matching crc-docs checkout, use its local copies. For a URL-only run with no revision
+specified, the published copy is
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/how-exposed-is-this-company/SKILL.md`.
+
+If a branch or revision is named, use that same revision for every download in
+this skill (the pipeline, the map builder and the chart helper): replace `main`
+in the raw URLs below with it.
 
 The reader may not be an expert. Plain words, no jargon, no invented numbers.
 Never ask for identifiers or technical options.
@@ -28,39 +33,57 @@ Never ask for identifiers or technical options.
    Use exactly these hex colours, light to dark (later is darker): Route 1's
    three bars `#fa9b75`, `#ef3b2c`, `#a50f15`; Route 2's two bars `#fa9b75`,
    `#cb181d`. No other colours.
-   Label axes with units and title it with the company. The chart is required:
-   never skip it. Use the host's chart tool if there is one. Otherwise draw it
-   with Python (matplotlib), save the PNG, then render it inline: return the PNG
-   itself as image content in the conversation. A file name, a download card or a
-   markdown image link alone does not satisfy this. In ChatGPT Work Mode, call
-   this with the chart's actual absolute path (the `image(...)` call is what
-   returns the chart as image content):
+   Label axes with units and title the chart with the company. The reader must
+   see the bars directly under **Chart** in the final reply with tool activity
+   collapsed. Display it at the full available width of the chat column as a
+   static, non-interactive image: never a small thumbnail or a link in place of
+   the chart. Draw it wide (for example 12 x 5 inches at 120 dpi, which also keeps
+   the PNG under the helper's size limit), with readable labels and minimal outer
+   margins. If the client caps inline image width, use the largest size it
+   supports and do not claim the chart fills the column unless you verified it.
+   Select the delivery method by the client's rendering capabilities.
 
-       const chart = await tools.view_image({ path: "/absolute/path/to/chart.png" });
-       image(chart.image_url);
+   - When the client supports Work Mode final-answer visualization references,
+     use this run's chart PNG, drawing it once with matplotlib if needed. From
+     the skill folder run the following command with the actual PNG path and a
+     short description of its metric and units:
 
-   In Claude, display the image in the tool output. Under the inline chart add
-   one link to the PNG (in ChatGPT `[Open the chart](sandbox:/mnt/data/<name>-chart.png)`;
-   the sandbox opens it). If direct image output is unavailable, say so in one
-   line and give that link alone.
+         python3 scripts/prepare_inline_chart.py "$chart_png" --alt "$chart_description"
+
+     In a checkout, the helper is beside this SKILL.md under `scripts/`. For a
+     URL-only run, download the helper from that same directory and revision.
+     Copy the one line it prints verbatim under **Chart** in the FINAL reply,
+     on its own line, outside a code block. The line embeds the original PNG.
+     A tool preview validates the image during execution only. If the helper
+     reports that the image is too large, export the same plot as a smaller PNG.
+   - On a client with a different inline chart or image renderer, use its
+     supported final-message format. When the renderer supports the required
+     grouped columns, units and colours, the chart can be drawn there directly.
+   - If the client exposes no inline renderer, or rendering cannot be prepared,
+     say so in the Chart section and retain the metric table. In either case,
+     add one **Open the chart** link below the chart or fallback message when
+     the host provides a verified, user-accessible PNG attachment from this run.
 4. **Map and files** (only when you have locations; see Map below):
    - the live map link, as the first bullet;
-   - <name>-map.html: <short description> (plain text, no backticks, no link);
-   - <name>-locations.geojson: <short description> (plain text, no backticks,
-     no link).
-   Do not add a line of file links anywhere, and do not link the file names. The
-   only link in this block is the live map. End the reply with the two files
-   attached as download cards (one per file, download button only): in ChatGPT
-   attach the files from this run as you would attach a file to a message, with
-   no link text before or after the cards. Always copy the files from this run
-   into the downloads folder under fresh descriptive names (e.g.
-   `apple-fl-map.html`) and attach those; never attach or link an earlier copy
-   or a `chatgpt.com/library` URL.
+   - <name>-map.html: <short description>, plain text;
+   - <name>-locations.geojson: <short description>, plain text.
+   The live map is the only link in this block: no links or backticks on the
+   file names. Then attach both files as download cards, shown after your closing
+   lines (write nothing after them). Copy this run's files into the downloads
+   folder under fresh descriptive names (e.g. `apple-fl-map.html`) and attach
+   those, never an earlier copy or a `chatgpt.com/library` URL.
 
-Then close with two short lines: **How sure are we** (scores depend on which
+Close the text with two short lines: **How sure are we** (scores depend on which
 assets are known and on damage functions, so they suit comparing companies and
 futures; Route 2 uses an open map of one area's locations with equal values, not
 the company's asset register) and **Next step** (see each route).
+
+**Before you send, check both.** If one fails, fix it first:
+1. The bars are visible directly under Chart in the final reply, shown by the
+   helper's printed line or the host's inline renderer. A file name or card for
+   the PNG is not enough.
+2. If map files exist, both are attached as download cards (on clients that
+   can attach files).
 
 ## Step 1: find the company
 
@@ -69,8 +92,11 @@ or ticker is fine." For an index or list, compare the companies instead.
 
 ## Step 2: get the data
 
-If the person names a route ("use CRC Open", "use CDT"), use it. Otherwise use
-the first that works: Route 1, then 2, then 3. Say which you used.
+If the person names a route ("use CRC Open", "use the free data", "use CDT"),
+use it even when another is available. Otherwise use the first that works:
+Route 1, then 2, then 3. Say which you used. If they ask for CRC Open and you
+cannot run Python with internet, say so in one line and stop: never switch to
+CDT, and never label CDT figures as CRC Open.
 
 ### Route 1: CDT (when `search_companies` and related CDT Express tools exist)
 
@@ -84,7 +110,9 @@ the first that works: Route 1, then 2, then 3. Say which you used.
    `get_market_index_companies_climate_scores` with `pathway: "ssp585"`,
    `horizon: "2050"`, the same metrics, `sort_by: "expected_impact"`. Report the
    company's rank.
-4. Map: if `get_company_assets` returns coordinates, write them as
+4. Prepare the chart PNG now (see Output section 3); show it once, in the
+   final reply.
+5. Map: if `get_company_assets` returns coordinates, write them as
    `locations.geojson` (one point per asset, scores as numeric properties, a
    `name` or `city` property) and follow Map. No coordinates means no map: say so.
 
@@ -119,7 +147,9 @@ python how_exposed_is_this_company.py --brand "BRAND" --bounds W S E N --region 
    The Overture query alone can take about two minutes, longer than some
    sandboxes allow a single command. Run it in the background
    (`nohup python ... > run.log 2>&1 &`), check `run.log` every 20 seconds until
-   the `GeoJSON:` line appears, and keep the same `--output` folder so retries
+   the process has exited, then read `summary.json` and the printed lines (the
+   `GeoJSON:` line alone is not a completion signal: a run with no places never
+   prints it). Keep the same `--output` folder so retries
    reuse the cached locations. If it still fails, say it failed and why; never
    quote numbers from a run you did not just complete. If no places are found, try other
    spellings of the brand.
@@ -127,7 +157,9 @@ python how_exposed_is_this_company.py --brand "BRAND" --bounds W S E N --region 
    `a_public.hurricanes` is the share of locations with a hurricane within 50 km;
    `b_crc_open.average_expected_damage_pct` is the average location's expected
    yearly damage by hazard for `early` (2025-2035) and `late` (2070-2080).
-4. Say the data has no historical baseline and covers SSP5-8.5 only; other
+4. Prepare the chart PNG now (see Output section 3); show it once, in the
+   final reply.
+5. Say the data has no historical baseline and covers SSP5-8.5 only; other
    futures: opensource@riskthinking.ai.
 
 Next step: "This free data covers one high-emissions future and one area. For
@@ -181,13 +213,11 @@ overlaid top-right (`controlsPlacement: "overlay-top-right"`).
    location with hurricane counts and expected-damage fields; also opens in
    QGIS, geojson.io or Kepler.gl.
 
-In a sandbox the pipeline copies files to the downloads folder (`/mnt/data` in
+In a sandbox the pipeline copies the files to the downloads folder (`/mnt/data` in
 ChatGPT, `/mnt/user-data/outputs` in Claude) and prints a `Download file:` line
-for each. Attach those files from this run, as described in **Map and files**.
-If you ran the commands without the pipeline, copy the files there yourself with
-descriptive names (e.g. `walmart-fl-map.html`, `walmart-fl-locations.geojson`).
-With no downloads folder, give plain-text paths and rely on the live link. Never
-claim a map or file was provided if it was not.
+for each. Without the pipeline, copy them there yourself. With no downloads
+folder, give plain-text paths and rely on the live link. Never claim a map or
+file was provided if it was not.
 
 ## Rules
 
