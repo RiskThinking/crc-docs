@@ -30,10 +30,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import importlib.util
 import json
 import os
+import shutil
 import sys
 import tempfile
+import time
 import urllib.request
 import warnings
 from datetime import UTC, datetime
@@ -50,6 +54,7 @@ from crc_sdk.workflows import HazardDataset, IBTrACSPlan, ImpactContextColumns
 
 FLORIDA = (-87.7, 24.4, -79.9, 31.1)
 OVERTURE_CATALOG = "https://stac.overturemaps.org/catalog.json"
+CATALOG_MAX_AGE = 24 * 3600  # seconds: how long "latest release" is reused
 HAZARDS = {
     "cyclone": "hurricane wind",
     "rx1day": "heavy rain",
@@ -90,22 +95,49 @@ MORE_DATA = "mailto:opensource@riskthinking.ai"
 TRIAL = "https://velo.riskthinking.ai/cdt-express"
 
 
-def read_json(url: str) -> dict[str, Any]:
+def read_json(
+    url: str, cache: Path | None = None, max_age: float | None = None
+) -> dict[str, Any]:
+    """Fetch JSON, reusing a copy in ``cache`` younger than ``max_age`` seconds.
+
+    ``max_age=None`` keeps a cached copy forever (for files of a fixed release).
+    """
+    path = None
+    if cache is not None:
+        path = (
+            cache / "stac" / (hashlib.sha256(url.encode()).hexdigest()[:16] + ".json")
+        )
+        if path.is_file() and (
+            max_age is None or time.time() - path.stat().st_mtime < max_age
+        ):
+            try:
+                return json.loads(path.read_text())
+            except ValueError:  # a damaged cache file: fetch it again
+                pass
     with urllib.request.urlopen(url, timeout=60) as response:
-        return json.load(response)
+        data = json.load(response)
+    if path is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_atomic(path, json.dumps(data))
+    return data
 
 
-def overture_files(bounds: tuple[float, float, float, float]) -> tuple[str, list[str]]:
-    """Return the latest Overture release and the Places files covering bounds."""
-    release = str(read_json(OVERTURE_CATALOG)["latest"])
+def overture_files(
+    bounds: tuple[float, float, float, float], cache: Path | None = None
+) -> tuple[str, list[str]]:
+    """Return the latest Overture release and the Places files covering bounds.
+
+    The catalog's ``latest`` is cached for a day; each release's files never change.
+    """
+    release = str(read_json(OVERTURE_CATALOG, cache, CATALOG_MAX_AGE)["latest"])
     collection = read_json(
-        f"https://stac.overturemaps.org/{release}/places/place/collection.json"
+        f"https://stac.overturemaps.org/{release}/places/place/collection.json", cache
     )
     files = []
     for link in collection["links"]:
         if link.get("rel") != "item":
             continue
-        item = read_json(link["href"])
+        item = read_json(link["href"], cache)
         west, south, east, north = item["bbox"]
         if not (
             east < bounds[0]
@@ -125,16 +157,33 @@ def find_locations(
     cache: Path,
 ) -> dict[str, Any]:
     """Places whose Overture brand name matches ``brand`` inside ``bounds``."""
-    release, files = overture_files(bounds)
+    release, files = overture_files(bounds, cache)
     if not files:
         return {"available": False, "reason": "no Overture Places files cover the area"}
+    key = json.dumps(
+        [release, brand.lower(), list(bounds), region, sorted(categories or [])]
+    )
+    cached = (
+        cache / "places" / (hashlib.sha256(key.encode()).hexdigest()[:16] + ".parquet")
+    )
+    if cached.is_file():
+        try:
+            table = pq.read_table(cached)
+        except (OSError, pa.ArrowInvalid):  # a damaged cache file: query again
+            table = None
+        if table is not None:
+            return places_result(table, release, brand)
     conditions = [
         f"bbox.xmin BETWEEN {bounds[0]} AND {bounds[2]}",
         f"bbox.ymin BETWEEN {bounds[1]} AND {bounds[3]}",
         f"lower(brand.names.primary) = lower({sql_quote(brand)})",
     ]
     if region:
-        conditions.append(f"addresses[1].region = {sql_quote(region)}")
+        # Releases before 2026-11-18 write "FL"; newer ones write "US-FL".
+        conditions.append(
+            f"(addresses[1].region = {sql_quote(region)} "
+            f"OR addresses[1].region LIKE {sql_quote('%-' + region)})"
+        )
     if categories:
         conditions.append(
             "basic_category IN (" + ", ".join(sql_quote(c) for c in categories) + ")"
@@ -150,6 +199,15 @@ def find_locations(
         ORDER BY id
         """
     ).to_arrow_table()
+    if table.num_rows:
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        temporary = cached.with_suffix(".tmp")
+        pq.write_table(table, temporary)
+        os.replace(temporary, cached)
+    return places_result(table, release, brand)
+
+
+def places_result(table: pa.Table, release: str, brand: str) -> dict[str, Any]:
     if table.num_rows == 0:
         return {"available": False, "reason": f"no Overture places for brand {brand!r}"}
     return {
@@ -486,42 +544,116 @@ def locations_geojson(
     return {"type": "FeatureCollection", "features": features}
 
 
-def build_map(output: Path) -> Path | None:
-    """Build the crc-viz hazard map page when the bundle is available locally.
+MAP_TOOL_URL = "https://raw.githubusercontent.com/RiskThinking/crc-docs/main/tools/build_map_page.py"
 
-    Needs the repository's ``tools/build_map_page.py``; a downloaded copy of this
-    script alone skips the map (the skill then runs that tool itself).
+
+def map_tool(output: Path) -> tuple[Any, bool]:
+    """The map tool module and whether it came from this checkout.
+
+    A script downloaded on its own has no ``tools/`` folder, so the tool is fetched
+    from the repository instead; the map never depends on the skill being read.
     """
     root = Path(__file__).resolve().parents[1]
-    if not (root / "tools" / "build_map_page.py").is_file():
-        return None
-    sys.path.insert(0, str(root))
+    if (root / "tools" / "build_map_page.py").is_file():
+        sys.path.insert(0, str(root))
+        try:
+            from tools import build_map_page
+
+            return build_map_page, True
+        except ImportError:
+            pass
     try:
-        from tools.build_map_page import build, find_bundle
-    except ImportError:
-        return None
-    viz = find_bundle(download=False)
-    if viz is None:
-        return None
-    return build(
-        output / "locations.geojson", viz, output / "map", "Locations on the CRC map"
+        path = output / "map_tool" / "build_map_page.py"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(MAP_TOOL_URL, timeout=60) as response:
+            path.write_bytes(response.read())
+        spec = importlib.util.spec_from_file_location("build_map_page", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module, False
+    except (OSError, ImportError, SyntaxError):  # offline or blocked
+        return None, False
+
+
+HOST_DOWNLOADS = (Path("/mnt/user-data/outputs"), Path("/mnt/data"))
+
+
+def publish_downloads(files: dict[str, Path]) -> bool:
+    """Copy the map files into the chat host's downloads folder, if it has one.
+
+    ChatGPT serves files in ``/mnt/data`` and Claude in ``/mnt/user-data/outputs``; the
+    chat shows each file there as a download button. Links to file paths (even
+    ``sandbox:``) open the sandbox instead of downloading, so the answer must not use them.
+    """
+    for folder in HOST_DOWNLOADS:
+        if not (folder.is_dir() and os.access(folder, os.W_OK)):
+            continue
+        for name, source in files.items():
+            if source.is_file():
+                shutil.copy2(source, folder / name)
+                print(f"Download file: {folder / name}")
+        print(
+            f"These files are in the chat's downloads folder {folder}: the chat shows "
+            "them as download buttons. Name them in plain text; do not write links."
+        )
+        return True
+    return False
+
+
+def deliver_map(output: Path, geojson_name: str, title: str) -> None:
+    """Print the three map outputs the person should receive: link, page, GeoJSON."""
+    geojson = output / geojson_name
+    tool, local = map_tool(output)
+    if tool is None:
+        print(
+            f"No map built (map tool could not be fetched); GeoJSON: {geojson.resolve()} "
+            "(open it in QGIS or geojson.io)."
+        )
+        return
+    link = tool.encode_link(json.loads(geojson.read_text()))
+    print(f"Live map: {link}")
+    write_atomic(output / "live_map_link.txt", link + "\n")
+    write_atomic(
+        output / "live_map.html",
+        '<!doctype html><meta charset="utf-8"><title>Open the map</title>'
+        f'<meta http-equiv="refresh" content="0;url={link}">'
+        f'<p><a href="{link}">Open the live map</a></p>\n',
     )
-
-
-def live_map_link(geojson: Path) -> str | None:
-    """Link to the hosted map viewer with every location packed into the #fragment.
-
-    Needs no bundle, only the repository's ``tools/build_map_page.py``.
-    """
-    root = Path(__file__).resolve().parents[1]
-    if not (root / "tools" / "build_map_page.py").is_file():
-        return None
-    sys.path.insert(0, str(root))
-    try:
-        from tools.build_map_page import encode_link
-    except ImportError:
-        return None
-    return encode_link(json.loads(geojson.read_text()))
+    print(
+        f"Link files: {(output / 'live_map.html').resolve()} (opens the map when "
+        f"opened in a browser) and {(output / 'live_map_link.txt').resolve()} "
+        "(the full link as text)"
+    )
+    viz = tool.find_bundle(download=not local)
+    if viz is not None:
+        page = tool.build(geojson, viz, output / "map", title)
+        print(f"Map: {page.resolve()} (one self-contained file; open it in a browser)")
+    else:
+        print("No map file built (crc-viz bundle not found); the live map link works.")
+    print(f"GeoJSON: {geojson.resolve()} (also opens in QGIS, geojson.io or Kepler.gl)")
+    shared = publish_downloads(
+        {
+            "company-map.html": output / "map" / "index.html",
+            "company-locations.geojson": geojson,
+        }
+    )
+    print(
+        "Paste this Map and files list into your answer unchanged. The live map line "
+        "is the only link; the file names are plain text, never links:"
+    )
+    print(f"- [Open the live map]({link})")
+    map_file = (
+        "company-map.html" if shared else str((output / "map" / "index.html").resolve())
+    )
+    geo_file = "company-locations.geojson" if shared else str(geojson.resolve())
+    note = " (download button below)" if shared else ""
+    print(
+        f"- {map_file}: the map as one file{note}; opens in Chrome, Safari or "
+        "Firefox and needs internet for the basemap"
+    )
+    print(
+        f"- {geo_file}: the map data{note}; also opens in QGIS, geojson.io or Kepler.gl"
+    )
 
 
 def headline(brand: str, places: dict, storms: dict, crc: dict, cdt: dict) -> str:
@@ -657,19 +789,8 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         )
     print(answer)
     if places["available"]:
-        page = build_map(args.output)
-        link = live_map_link(args.output / "locations.geojson")
-        if link:
-            print(f"Live map: {link}")
-        if page:
-            print(
-                f"Map: {page.resolve()} (one self-contained file; open it in a browser)"
-            )
-        else:
-            print(
-                f"No map built (crc-viz bundle not found); open {args.output}/"
-                "locations.geojson in QGIS or geojson.io."
-            )
+        deliver_map(args.output, "locations.geojson", "Locations on the CRC map")
+
     return summary
 
 

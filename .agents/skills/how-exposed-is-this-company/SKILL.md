@@ -5,210 +5,211 @@ description: Tells investors, lenders and analysts how exposed a listed company 
 
 # How exposed is this company?
 
-The person asking may not be an expert. Give them a short, honest answer they can
-repeat to someone else: one headline sentence, one small table, one chart when
-the host can draw it, and one line on how sure we are. Avoid jargon; when a term
-is unavoidable, explain it in a few words.
+Every raw URL below points at the branch `plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by`: use it for this
+skill, the pipeline, the map builder and the chart helper. If the user names a
+different revision, swap it into those URLs; in a matching crc-docs checkout,
+use the local copies. This skill's file is
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/.agents/skills/how-exposed-is-this-company/SKILL.md`.
 
-Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/how-exposed-is-this-company/SKILL.md`.
-If you can fetch it and it differs from this copy, follow the fetched one,
-unless you are inside a checkout of the crc-docs repository: then this copy and
-the repository's own `pipelines/` and `tools/` are newer than the published
-ones, so use them and do not download replacements.
+The reader may not be an expert: plain words, no jargon, no invented numbers.
+Never ask for identifiers or technical options.
 
-## 1. Find the company
+## Output: four sections, always in this order
 
-Use a company already named in the conversation; otherwise ask one question:
-"Which company? A name or ticker is fine." If the person asks about an index or
-a list of companies, compare them instead. Never ask for identifiers or
-technical options.
+1. **Interpretation**: one headline sentence, then at most three short bullets
+   (what the numbers mean, how it grows, how it compares). Name the data route.
+2. **Table**: one row per metric or hazard; one column per future and horizon
+   (or period).
+3. **Chart**: a grouped column chart, one group per category.
+   - Route 1: groups are SSP2-4.5 and SSP5-8.5; three bars each, the horizons
+     2030, 2050, 2090, showing expected impact (% of asset value).
+   - Route 2: groups are wind, rain, heat, total; two bars each, 2025-2035 and
+     2070-2080 expected yearly damage (% of building value).
 
-## 2. Use the best data you can reach
+   Use exactly these hex colours, light to dark: Route 1 `#fa9b75`, `#ef3b2c`,
+   `#a50f15`; Route 2 `#fa9b75`, `#cb181d`. No other colours. Label axes with
+   units and title the chart with the company. Draw it wide (e.g. 12 x 5 inches
+   at 120 dpi), with readable labels and minimal margins.
 
-If the person names a source ("use CRC Open", "use the free data", "use CDT"),
-use that route even when another is available. Otherwise check the three routes
-in order and use the first that works. Tell the person which one you used.
+   The reader must see the bars directly under **Chart** in the final reply, with
+   tool activity collapsed, as a static image at the full width of the chat
+   column: never a thumbnail, a file name or a link instead. Choose the method by
+   what the client supports:
+   - **ChatGPT Work Mode:** use this run's chart PNG (draw it with matplotlib if
+     needed) and run, from the skill folder (for a URL-only run, download the
+     helper from the same directory and revision):
 
-### Route 1: CDT, when the CDT Express connection is available
+         python3 scripts/prepare_inline_chart.py "$chart_png" --alt "$chart_description"
 
-CDT is Riskthinking.AI's Climate Digital Twin. If you have CDT Express tools
-(names such as `search_companies`), use them. CDT already knows the assets of
-thousands of listed companies worldwide.
+     `$chart_description` is a short description of the metric and units. Copy
+     the one line it prints verbatim under **Chart** in the FINAL reply, on its
+     own line, outside a code block. A tool preview does not count. If it says
+     the image is too large, export a smaller PNG.
+   - **Another client with an inline chart or image renderer:** use its
+     final-message format.
+   - **No inline renderer, or it fails:** say so in the Chart section and keep
+     the table. Add one **Open the chart** link when the host provides a verified
+     PNG attachment from this run.
+4. **Map and files** (only when you have locations; see Map):
+   - the live map link, first bullet (see Map);
+   - `<name>-map.html: <short description>`, plain text;
+   - `<name>-locations.geojson: <short description>`, plain text.
 
-1. Call `search_companies` with the company `name` (or `stock_ticker`); if a
-   strict search finds nothing, retry with `method: "fuzzy"`. Confirm the match
-   with the person when the name is ambiguous.
-2. Call `get_company_climate_scores` with its `company_id` and
-   `metric: ["expected_impact", "cvar_95", "dcr_score"]` for each `pathway` in
-   `ssp245` and `ssp585` and each `horizon` in `2030`, `2050` and `2090`.
-3. For peers, find an index the person names (or a well-known one that includes
-   the company, such as the Dow Jones Industrial Average or S&P 500) with
-   `search_market_indexes`, then call
-   `get_market_index_companies_climate_scores` with its `index_id`,
-   `pathway: "ssp585"`, `horizon: "2050"`,
-   `metric: ["expected_impact", "cvar_95", "dcr_score"]` and
-   `sort_by: "expected_impact"`. Report the company's rank.
+   The live map is the only link in this block: no links or backticks on the file
+   names. Then attach both files as download cards, shown after your closing
+   lines (write nothing after them). Copy this run's files into the downloads
+   folder (`/mnt/data` in ChatGPT, `/mnt/user-data/outputs` in Claude; the
+   pipeline does this and prints `Download file:` lines) under fresh descriptive
+   names (e.g. `apple-fl-map.html`) and attach those, never an earlier copy or a
+   `chatgpt.com/library` URL. With no downloads folder, give plain-text paths
+   and rely on the live link. Never claim a file was provided if it was not.
 
-Scores are fractions; multiply by 100 for percent. **Expected impact** is the
-average damage as a share of tangible asset value; **tail risk** (`cvar_95`) is
-the average damage in the worst 5% of outcomes; **downside likelihood**
-(`dcr_score`) is the chance of more damage than around 2010. Compare SSP2-4.5
-with SSP5-8.5 for company totals.
+Close the text with two short lines: **How sure are we** (scores depend on which
+assets are known and on damage functions, so they suit comparing companies and
+futures; Route 2 uses an open map of one area's locations with equal values, not
+the company's asset register) and **Next step** (see each route).
 
-### Route 2: CRC Open, when you can run Python with internet access
+**Before you send, check both:** the bars are visible under Chart (the helper's
+line or the host's renderer; a file name or card is not enough), and, if map
+files exist, both are attached as download cards.
 
-CRC Open is free, ready-made climate data. Its public release covers one
-high-emissions future (SSP5-8.5); other futures are available from
-opensource@riskthinking.ai. This route finds the company's locations in one area
-on the open Overture map (by brand name), counts past hurricanes near them
-(North Atlantic only) and estimates expected yearly damage from hurricane wind,
-heavy rain and hot days with open damage functions.
+## Step 1: find the company
 
-Pick an area: the one the person asks about, otherwise the company's home state
-or region. Work out its bounding box (`min_lon min_lat max_lon max_lat`) and
-two-letter region code yourself and show them. Outside the USA, also pass
-`--country` (three-letter code, e.g. `CAN`) and `--continent` (e.g. `Europe`)
-so the damage functions match. Then install or update the
-toolkit and run the script:
+Use the company named in the conversation; else ask once: "Which company? A name
+or ticker is fine." For an index or list, compare the companies instead.
+
+## Step 2: get the data
+
+If the person names a route ("use CRC Open", "use the free data", "use CDT"), use
+it even when another is available. Otherwise use the first that works: Route 1,
+then 2, then 3. Say which you used. Call a route unavailable only after trying
+it: for CRC Open, run the install and the script before saying it cannot run. If
+a download is blocked, name the host and give the allowlist under Route 3. If
+they asked for CRC Open and it truly cannot run, say why in one line and stop:
+never switch to CDT, and never label CDT figures as CRC Open.
+
+### Route 1: CDT (when `search_companies` and related CDT Express tools exist)
+
+1. `search_companies` by `name` or `stock_ticker` (retry with `method: "fuzzy"`
+   if empty; confirm ambiguous matches).
+2. `get_company_climate_scores` with the `company_id`,
+   `metric: ["expected_impact", "cvar_95", "dcr_score"]`, for `pathway` in
+   `ssp245`, `ssp585` and `horizon` in `2030`, `2050`, `2090`.
+3. Peers: `search_market_indexes` (the index named, else a well-known one that
+   holds the company, e.g. S&P 500 or Dow Jones Industrial Average), then
+   `get_market_index_companies_climate_scores` with `pathway: "ssp585"`,
+   `horizon: "2050"`, the same metrics, `sort_by: "expected_impact"`. Report the
+   company's rank.
+4. Prepare the chart PNG (Output section 3); show it once, in the final reply.
+5. Map: if `get_company_assets` returns coordinates, write them as
+   `locations.geojson` (one point per asset, scores as numeric properties, a
+   `name` or `city` property) and follow Map. No coordinates means no map: say so.
+
+Scores are fractions; multiply by 100. **Expected impact** = average damage as a
+share of asset value. **Tail risk** (`cvar_95`) = average damage in the worst 5%
+of outcomes. **Downside likelihood** (`dcr_score`) = chance of more damage than
+around 2010.
+
+Next step: offer other companies, the riskiest assets, or other futures.
+
+### Route 2: CRC Open (when you can run Python with internet)
+
+Free data for one high-emissions future (SSP5-8.5), one area: the brand's
+locations on the open Overture map, past hurricanes within 50 km (North Atlantic
+only) and expected yearly damage from hurricane wind, heavy rain and hot days.
+CRC Open is open source: it needs no account, API key or connector, and it does
+not use CDT. A rejected or missing CDT connection says nothing about it. If a
+browser tool cannot fetch GitHub, download with `curl` in a shell instead.
+
+1. Pick the area (the one asked, else the company's home state or region). Work
+   out its bounding box `W S E N` and two-letter region code, and show them.
+   Outside the USA also pass `--country` (e.g. `CAN`) and `--continent`
+   (e.g. `Europe`); outside the North Atlantic add `--skip-hurricanes`.
+2. Run (use `scripts/how_exposed_is_this_company.py` from this folder if present,
+   or `pipelines/` in a checkout; else download):
 
 ```sh
 python -m pip install --quiet --upgrade "crc-sdk[geometry]"
 curl -fsSL -o how_exposed_is_this_company.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_exposed_is_this_company.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/pipelines/how_exposed_is_this_company.py
 python how_exposed_is_this_company.py --brand "BRAND" --bounds W S E N --region XX --skip-cdt
 ```
 
-If this skill folder contains `scripts/how_exposed_is_this_company.py`, run that
-copy instead of downloading one. It takes one to two minutes for a state. Add
-`--skip-hurricanes` outside the North Atlantic. If no places are found, try the
-brand's spelling on its storefronts. Read `pipeline_output/company/summary.json`:
-`answer` is the headline; `a_public.hurricanes` holds the share of locations a
-hurricane passed within 50 km of; `b_crc_open.average_expected_damage_pct`
-holds the average location's expected yearly damage (% of building value) by
-hazard for 2025–2035 (`early`) and 2070–2080 (`late`).
+   The Overture query can take about two minutes, longer than some sandboxes
+   allow one command. Run it in the background
+   (`nohup python ... > run.log 2>&1 &`), check `run.log` every 20 seconds until
+   the process has exited, then read `summary.json` and the printed lines (the
+   `GeoJSON:` line alone is not a completion signal: a run with no places never
+   prints it). Keep the same `--output` folder so retries reuse the cached
+   locations. If it still fails, say so and why; never quote numbers from a run
+   you did not just complete. If no places are found, try other spellings.
+3. Read `pipeline_output/company/summary.json`: `answer` is the headline;
+   `a_public.hurricanes` is the share of locations with a hurricane within 50 km;
+   `b_crc_open.average_expected_damage_pct` is the average location's expected
+   yearly damage by hazard for `early` (2025-2035) and `late` (2070-2080).
+4. Prepare the chart PNG (Output section 3); show it once, in the final reply.
+5. Say the data has no historical baseline and covers SSP5-8.5 only; other
+   futures: opensource@riskthinking.ai.
 
-The run also writes `pipeline_output/company/locations.geojson`: one point per
-location with its hurricane count (`hurricanes_within_50km_since_<year>`) and
-expected damage fields.
+Next step: "This free data covers one high-emissions future and one area. For
+the whole company, every future and peer rankings, try a
+[CDT Express trial](https://velo.riskthinking.ai/cdt-express)."
 
-**Map.** Build one self-contained HTML map of the locations, using crc-viz's
-hazard map, coloured by how many hurricanes passed within 50 km. Every
-numeric field of the locations (hurricane count and the CRC Open expected yearly
-damage per hazard and in total, % of building value, for 2025-2035 and 2070-2080)
-is offered as a colour field in the map's settings. Use this script, not a map of
-your own, so the page carries those fields and the VELO map styling. The script places the map's **Settings** control floating over
-the map's upper-right corner (`controlsPlacement: "overlay-top-right"`), not in a bar
-above it; keep it there, and if you ever build a map page yourself, pass that option
-to `CRCMap`:
+### Route 3: neither available
+
+Do not estimate or recall numbers. In two sentences say what the analysis would
+show, then offer:
+
+- **Free:** the
+  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/how_exposed_is_this_company.ipynb)
+  (edit `BRAND`, `AREA`, `REGION` in the first cell, then Runtime → Run all).
+- **Whole company, every future:** connect CDT Express, a custom connector
+  named **CDT Express** at `https://mcp.riskthinking.ai/mcp` (Claude: Customize →
+  Connectors → + Add → Add custom connector; ChatGPT: Plugins → + → Add custom
+  MCP server; [setup guide](https://github.com/RiskThinking/cdt-express-mcp#connect-by-url-recommended);
+  [trial](https://velo.riskthinking.ai/cdt-express)).
+
+If downloads fail, the sandbox likely blocks the network: ask to allow
+`pypi.org`, `raw.githubusercontent.com`, `data.riskthinking.ai`,
+`stac.overturemaps.org`, `overturemaps-us-west-2.s3.amazonaws.com`,
+`www.ncei.noaa.gov`, or use Route 3.
+
+## Map (every route with locations; deliver it without being asked)
+
+The pipeline already builds the map and prints `Live map:`, `Map:` and
+`GeoJSON:` lines. If a line is missing, or the data came from Route 1, run
+(inside a checkout use `tools/build_map_page.py`):
 
 ```sh
 curl -fsSL -o build_map_page.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/tools/build_map_page.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/tools/build_map_page.py
 python build_map_page.py pipeline_output/company/locations.geojson --link
 python build_map_page.py pipeline_output/company/locations.geojson \
   --output pipeline_output/company/map
 ```
 
-(Inside a crc-docs checkout use `tools/build_map_page.py`; the pipeline already
-writes the page and prints `Live map:` and `Map:` lines. If either line is
-missing from its output, run the commands above yourself before answering. The
-live link is very long: copy it from the output without editing, never
-truncate it, and if it is cut off, print it again with `--link`.)
+Always use this script, never a map of your own; keep its Settings control
+overlaid top-right (`controlsPlacement: "overlay-top-right"`).
 
-**Always deliver all three map outputs whenever you have locations to map, on any
-data route, without being asked.** The person should never have to request the map, the file or the data:
-
-1. **Live map link.** `--link` prints `Live map: https://riskthinking.github.io/crc-docs/map/#...`:
-   a link to the hosted map viewer with every location packed into the text
-   after the `#`. Give it as a clickable link, copied exactly and in full, never
-   shortened or retyped; it opens the map in their own browser. Do not start a
-   local server, and do not show or embed the map in a preview panel or the chat:
-   the map only works in a real browser tab.
-2. **Downloadable map file.** The second command writes `index.html` (about 3 MB,
-   everything inline, bundle downloaded automatically) to
-   `pipeline_output/company/map/index.html` (Route 2 paths; use your own folder
-   on other routes). Offer it as a file to download in
-   case the link fails, and say it opens in Chrome, Safari or Firefox and needs
-   internet for the basemap.
-3. **Downloadable GeoJSON.** Offer `pipeline_output/company/locations.geojson`
-   (the map data: one point per location with hurricane counts and expected
-   damage fields) as a second file to download, and say it also opens in QGIS,
-   geojson.io or Kepler.gl.
-
-If you run in a sandbox or chat host that can attach files (for example an
-outputs or downloads folder, or an artifact/file-sharing tool), copy
-`index.html` and `locations.geojson` there, named after the brand (for example
-`walmart-fl-map.html`, `walmart-fl-locations.geojson`), so they appear as
-downloads. Otherwise give each file's full absolute path. If you cannot run the
-script, say so and still give the path to `locations.geojson`. Never claim a map
-was shown or a file was provided if it was not.
-
-**Other routes.** The map script draws any GeoJSON of points and offers every
-numeric property as a colour field, so it is not limited to CRC Open. When the
-CDT route (Route 1) returns assets with coordinates, write them as a
-`locations.geojson` (one point per asset, the scores as numeric properties, and a
-`city` or `name` property for the tooltip), run the same two commands and deliver
-the same three outputs. If a route returns no coordinates, say there is no map for
-this answer; never place points from memory.
-
-If a download is blocked, the sandbox probably limits internet access. Say so,
-and suggest allowing `pypi.org`, `raw.githubusercontent.com`,
-`data.riskthinking.ai`, `stac.overturemaps.org`, `overturemaps-us-west-2.s3.amazonaws.com`
-and `www.ncei.noaa.gov`, or use Route 3.
-
-### Route 3: neither is available
-
-Do not estimate or recall numbers. Explain in two sentences what the analysis
-would show, then offer both options:
-
-- **Free, no setup:** open the
-  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/how_exposed_is_this_company.ipynb),
-  change `BRAND`, `AREA` and `REGION` in the first cell and choose **Runtime → Run all**.
-- **The whole company, every emissions future, in this chat:** connect CDT
-  Express. Add a custom connection named **CDT Express** with the URL
-  `https://mcp.riskthinking.ai/mcp` and sign in (Claude: **Customize →
-  Connectors → + Add → Add custom connector**; ChatGPT: **Plugins → + → Add
-  custom MCP server**; full steps in the
-  [setup guide](https://github.com/RiskThinking/cdt-express-mcp#connect-by-url-recommended)).
-  A [CDT Express trial](https://velo.riskthinking.ai/cdt-express) provides access.
-
-## 3. Answer
-
-1. **Headline**, for example: "Across all its assets, CDT puts Walmart's expected
-   climate damage at about 12% of asset value by 2050 under high emissions
-   (11% under a middle path), 14th of the 30 Dow companies." Or for Route 2:
-   "Since 1990 a hurricane passed within 50 km of 81% of Walmart's Florida
-   stores; the average store's expected yearly damage roughly doubles, from
-   0.8% to 1.6% of its value, by 2070–2080, mostly from heat."
-2. **Table:** rows for each score (or hazard), columns for each future and
-   horizon (or period).
-3. **Chart**, when you can draw one: expected impact by horizon, one line per
-   future; or the index ranked by expected impact with the company highlighted.
-   On every route that has locations, follow the chart with a **Map and files**
-   block listing the live map link, the downloadable `index.html` map and the
-   downloadable `locations.geojson`, as described under Route 2. Include it every
-   time.
-4. **How sure are we**, one or two lines: scores depend on which assets are
-   known and on damage functions, so they are best for comparing companies and
-   futures; Route 2 uses an open map of one area's locations with equal values,
-   not the company's own asset register.
-5. **Next step**, one line matching the route:
-   - Route 1: offer to compare with other companies, look at the riskiest
-     assets, or switch emissions futures.
-   - Route 2: "This free data covers one high-emissions future and one area.
-     For the whole company, every future and peer rankings, try a
-     [CDT Express trial](https://velo.riskthinking.ai/cdt-express)."
+- **Live link:** paste the pipeline's `- [Open the live map](...)` line unchanged
+  as the first bullet of **Map and files**, in the answer text. Never shorten,
+  retype or truncate it; if cut off, read `live_map_link.txt` next to the GeoJSON
+  or attach `live_map.html`. Do not start a server or embed the map in the chat:
+  it only works in a browser tab.
+- **Map file:** `pipeline_output/company/map/index.html` (about 3 MB); opens in
+  Chrome, Safari or Firefox and needs internet for the basemap.
+- **GeoJSON:** `pipeline_output/company/locations.geojson`, one point per
+  location with hurricane counts and expected-damage fields; also opens in QGIS,
+  geojson.io or Kepler.gl.
 
 ## Rules
 
-- Never invent or guess numbers. Report missing data as missing, not as safe.
-- Don't compare Route 1 scores with Route 2 damage numbers; they use different
-  hazards, assets and bases.
-- Name the source: "Riskthinking.AI Climate Digital Twin (CDT)" (licensed), or
-  "CRC Open by Riskthinking.AI, CC BY-NC 4.0" (free for non-commercial use),
-  plus "Overture Maps Foundation" and "NOAA IBTrACS" for Route 2.
-- Overture places show where a brand operates, not what the company owns.
-- This is not investment advice.
-- SSP5-8.5 is a high-emissions future, not a prediction of what will happen.
-- Don't ask for or display API keys; CDT access uses the connector's sign-in.
+- Never invent or guess numbers; report missing data as missing, not as safe.
+- Do not compare Route 1 scores with Route 2 damage; different hazards, assets
+  and bases.
+- Source line: "Riskthinking.AI Climate Digital Twin (CDT)" (licensed), or
+  "CRC Open by Riskthinking.AI, CC BY-NC 4.0" plus "Overture Maps Foundation"
+  and "NOAA IBTrACS" for Route 2.
+- Overture places show where a brand operates, not what it owns.
+- SSP5-8.5 is a high-emissions future, not a prediction. Not investment advice.
+- Never ask for or show API keys; CDT uses the connector's sign-in.
