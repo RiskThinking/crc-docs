@@ -5,195 +5,228 @@ description: Ranks a list of places (stores, offices, warehouses, plants, homes)
 
 # Which of my sites are most at risk?
 
-The person asking may not be an expert. Give them a short, honest answer they can
-act on: a headline naming the sites that change most and from what, one table,
-one chart when the host can draw it, and one line on how sure we are. Avoid
-jargon; when a term is unavoidable, explain it in a few words.
+Every raw URL below points at the branch `plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by`: use it for this
+skill, the pipeline, the map builder and the chart helper. If the user names a
+different revision, swap it into those URLs; in a matching crc-docs checkout,
+use the local copies. This skill's file is
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/.agents/skills/which-sites-are-most-at-risk/SKILL.md`.
 
-Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/which-sites-are-most-at-risk/SKILL.md`.
-If you can fetch it and it differs from this copy, follow the fetched one,
-unless you are inside a checkout of the crc-docs repository: then this copy and
-the repository's own `pipelines/` and `tools/` are newer than the published
-ones, so use them and do not download replacements.
+The reader may not be an expert: plain words, no jargon, no invented numbers.
+Never ask for coordinates or technical options.
 
-## 1. Collect the sites
+## Output: four sections, always in this order
 
-Use places already in the conversation or an attached file. Otherwise ask one
-question: "Which places should I compare? Names or addresses are fine." Work out
-each latitude and longitude yourself and show them in a short list, so the person
-can correct you. Give every site a short unique name. Never ask for coordinates
-or technical options. Up to about 25 sites works well in a chat; for more,
-suggest the Colab notebook or the script below.
+Every reply has all four, including when the conversation already holds results
+for these sites: then reuse the numbers, but still draw this reply's chart with
+the helper, get the live link (below) and copy the files into the downloads
+folder. Never answer with links to earlier files or a link in place of the chart.
 
-## 2. Use the best data you can reach
+1. **Interpretation**: one headline sentence naming the sites that change most
+   and from what (e.g. "Toronto's hottest days warm the most, +4.2 °C by
+   2070-2080; Phoenix gains the most hot days"), then at most three short
+   bullets. Name the data route.
+2. **Table**: the 3 sites with the largest change in each hazard, combined (a
+   site that leads two hazards appears once), and no other sites. Sort the rows by the hazard asked about,
+   else hottest day. One short-headed column per hazard showing every row's
+   change, with units, so it fits the chat column. **Bold** the highest value in
+   each column. Say how many sites you ran. Write the table in the reply: never
+   offer or link a table file (the GeoJSON holds every value).
+3. **Chart**: one wide image with one panel per hazard (hottest day in °C, hot
+   days in days, wettest day in mm; leave out a hazard with no data). Each panel
+   is a horizontal bar chart with one bar per site showing the change from the
+   earlier period to the later one, sorted largest first, so the top bar is the
+   most exposed site for that hazard. Sort each panel on its own. Print the value
+   at the end of each bar; use the site names as labels.
+   - Route 1: change from the baseline to SSP5-8.5 averaged over 2070-2090.
+   - Route 2: change from 2023-2036 to 2068-2081.
 
-If the person names a source ("use CRC Open", "use the free data", "use CDT"),
-use that route even when another is available. Otherwise check the three routes
-in order and use the first that works. Tell the person which one you used and,
-when both data routes are available, offer to rerun with the other.
+   Colour each bar by the size of its change, interpolating in RGB between two
+   colours from `IMPACT_RISK_COLOURS` (`assets/impact_risk_colours.json`):
+   `#fa9b75` at the panel's smallest change and `#a50f15` at its largest, with
+   t = (value - min) / (max - min) per panel (all bars `#ef3b2c` if they are
+   equal; in matplotlib, `LinearSegmentedColormap.from_list` with those two
+   colours). No other colours. A panel's title names the hazard and units, and
+   the figure's title says the periods compared.
+   Put the panels side by side, each with its own site labels, in a figure about
+   15 inches wide at 120 dpi and about 0.35 inches per site plus 1.5 (at least 4)
+   tall, with readable labels and minimal margins. With more than 10 sites, show
+   the 10 largest changes per panel and say so in the title.
 
-Compare **1-in-10-year** values (a level with a 10% chance in any year) and
-average several horizons, because single future years are noisy.
+   The reader must see the chart directly under **Chart** in the final reply, with
+   tool activity collapsed, as a static image at the full width of the chat
+   column: never a thumbnail, a file name or a link instead. Choose the method by
+   what the client supports:
+   - **ChatGPT Work Mode:** use this run's chart PNG (draw it with matplotlib if
+     needed) and run, from the skill folder (for a URL-only run, download the
+     helper from the same directory and revision):
 
-### Route 1: CDT, when the CDT Express connection is available
+         python3 scripts/prepare_inline_chart.py "$chart_png" --alt "$chart_description"
 
-CDT is Riskthinking.AI's Climate Digital Twin. If you have CDT Express tools
-(names such as `get_climate_metrics_exposure`), use them. They give every
-emissions future and a matching historical baseline. For each site:
+     `$chart_description` is a short description of the hazard and units. Copy
+     the one line it prints verbatim under **Chart** in the FINAL reply, on its
+     own line, outside a code block. A tool preview does not count. If it says
+     the image is too large, export a smaller PNG.
+   - **Another client with an inline chart or image renderer:** use its
+     final-message format.
+   - **No inline renderer, or it fails:** say so in the Chart section and keep
+     the table. Add one **Open the chart** link when the host provides a verified
+     PNG attachment from this run.
+4. **Map and files** (whenever you have sites; see Map): paste the pipeline's
+   printed list unchanged, three bullets: the live map link first (the only
+   link), then the map file and the GeoJSON as plain text with the file names it
+   printed. If you only have the bare URL (`live_map_link.txt`), write it as
+   `- [Open the live map](URL)`. Then add one plain-text bullet, `<name>-chart.png: <short
+   description>`, with the same name prefix. Do not rewrite the bullets, add
+   links or backticks, or rename files. After a Route 1 run or when the pipeline
+   printed no list, write the same three bullets yourself from Map's commands.
 
-1. Call `get_climate_metrics_exposure` with the site's `latitude` and
-   `longitude`, `risk_factors: ["tx_max", "hot_days", "rx1day"]`,
-   `pathway: ["ssp126", "ssp245", "ssp585"]`, `horizon: ["2070", "2080", "2090"]`
-   and `return_periods: [10]`. Average the three horizons for each pathway.
-2. Call it again with `pathway: ["historic"]` and `horizon: ["2010"]` for the baseline.
-3. `tx_max` is in kelvin (subtract 273.15 for °C), `hot_days` is a count of days
-   and `rx1day` is millimetres on the wettest day. A missing value means no
-   data, not zero.
+   Then attach the three files (map, GeoJSON, chart; never `live_map.html`) as
+   download cards, shown after your closing lines (write nothing after them). The
+   pipeline copies the map and GeoJSON into the downloads folder (`/mnt/data` in
+   ChatGPT, `/mnt/user-data/outputs` in Claude) and prints `Download file:`
+   lines; copy the chart PNG there yourself, named like them (e.g.
+   `sites-chart.png`). Attach those files, never an earlier copy or a
+   `chatgpt.com/library` URL. With no downloads folder, give plain-text paths and
+   rely on the live link. Never claim a file was provided if it was not.
 
-Rank the sites by the change from the historical baseline to 2070–2090 under
-each pathway.
+Close the text with two short lines: **How sure are we** (values describe an area
+of about 250 km² around each site, not the building, and come from climate
+models; exposed is not the same as damaged) and **Next step** (see each route).
 
-Then write `sites.geojson` for the map (see **Map and files** under Route 2): one
-point per site with a `title` property (the site's name, plus its city when known) and numeric properties
-`tx_max_change`, `hot_days_change` and `rx1day_change` (the SSP5-8.5 change from
-the baseline, in °C, days and mm), plus the same for the other pathways as
-`<hazard>_<pathway>_change`. Every `tx_max` value in the file must be in °C, never
-kelvin: the map labels it °C, so subtract 273.15 from any absolute CDT `tx_max`
-before writing it (a change needs no conversion, since 1 K equals 1 °C). Leave out
-any value CDT did not return.
+**Before you send, check:** the first bullet under Map and files is the full live
+map link; the panels are visible under Chart (the helper's
+line or the host's renderer; a file name or card is not enough), and, if map
+files exist, the map, GeoJSON and chart PNG are attached as download cards.
 
-### Route 2: CRC Open, when you can run Python with internet access
+## Step 1: collect the sites
 
-CRC Open is free, ready-made climate data. Its public release covers one
-high-emissions future (SSP5-8.5); other futures are available from
-opensource@riskthinking.ai. Write the sites to `sites.csv` with the header
-`site,latitude,longitude` (add a `city` column if you have one: the map title then reads "site (city)"), install or update the toolkit, then run the script:
+Use every place already in the conversation or an attached file; else ask once:
+"Which places should I compare? Names or addresses are fine." If the person
+names a company or brand without a list, get its real locations (the company's
+own store or office directory, or the how-exposed-is-this-company skill's
+open-map lookup) and map all of them. Never invent, sample or trim sites; if you
+can only get some, say how many and from where. Work out each latitude and
+longitude yourself, show a short list (or the count, for more than 25) so the
+person can correct you, and give every site a short unique name. The map takes
+every site; only the table and chart show the leaders. For more than about 100
+sites, suggest the Colab notebook.
+
+## Step 2: get the data
+
+If the person names a route ("use CRC Open", "use the free data", "use CDT"), use
+it even when another is available. Otherwise use the first that works: Route 1,
+then 2, then 3. Say which you used. Call a route unavailable only after trying
+it: for CRC Open, run the install and the script before saying it cannot run. If
+a download is blocked, name the host and give the allowlist under Route 3. If
+they asked for CRC Open and it truly cannot run, say why in one line and stop:
+never switch to CDT, and never label CDT figures as CRC Open.
+
+Compare **1-in-10-year** values (a level with a 10% chance in any year), averaging
+several horizons because single future years are noisy.
+
+### Route 1: CDT (when CDT Express tools such as `get_climate_metrics_exposure` exist)
+
+For each site:
+
+1. `get_climate_metrics_exposure` with `latitude`, `longitude`,
+   `risk_factors: ["tx_max", "hot_days", "rx1day"]`,
+   `pathway: ["ssp126", "ssp245", "ssp585"]`, `horizon: ["2070", "2080", "2090"]`,
+   `return_periods: [10]`. Average the horizons per pathway.
+2. Again with `pathway: ["historic"]`, `horizon: ["2010"]` for the baseline.
+3. `tx_max` is in kelvin (subtract 273.15 for °C), `hot_days` is days and `rx1day`
+   is mm on the wettest day. A missing value is no data, not zero.
+
+Rank by the change from the baseline to 2070-2090. Then write `sites.geojson`:
+one point per site with a `title` property (name, plus city when known) and
+numeric `tx_max_change`, `hot_days_change`, `rx1day_change` (SSP5-8.5 minus
+baseline, in °C, days, mm), plus `<hazard>_<pathway>_change` for the other
+pathways. Any absolute `tx_max` in the file must be in °C, never kelvin. Leave
+out values CDT did not return. Then follow Map.
+
+Next step: offer other emissions futures, more hazards, or financial impact on
+the buildings with the same connection.
+
+### Route 2: CRC Open (when you can run Python with internet)
+
+Free data for one high-emissions future (SSP5-8.5); other futures:
+opensource@riskthinking.ai. CRC Open is open source: it needs no account, API
+key or connector, and it does not use CDT. A rejected or missing CDT connection
+says nothing about it. If a browser tool cannot fetch GitHub, download with
+`curl` in a shell instead.
+
+Write the sites to `sites.csv` with the header `site,latitude,longitude` (add
+`city` if known), then run (use `scripts/which_sites_are_most_at_risk.py` from
+this folder if present, or `pipelines/` in a checkout; else download):
 
 ```sh
 python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a3,<2"
 curl -fsSL -o which_sites_are_most_at_risk.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/which_sites_are_most_at_risk.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/pipelines/which_sites_are_most_at_risk.py
 python which_sites_are_most_at_risk.py --sites sites.csv --skip-era5 --skip-cdt
 ```
 
-If this skill folder contains `scripts/which_sites_are_most_at_risk.py`, run that
-copy instead of downloading one. It takes several minutes. Read
-`pipeline_output/sites/summary.json`: `answer` names the site with the largest
-change per hazard, and `b_crc_open.one_in_10` holds every site's 1-in-10-year
-value in 2023–2036 (`early`), 2068–2081 (`late`) and the `change`, for the
-hottest day (°C), wettest day (mm), hot days and wildfire weather (Fire Weather
-Index).
+It takes several minutes. Read `pipeline_output/sites/summary.json`:
+`answer` names the site with the largest change per hazard, and
+`b_crc_open.one_in_10` holds every site's 1-in-10-year value in 2023–2036
+(`early`), 2068–2081 (`late`) and the `change`, for the hottest day (°C), wettest
+day (mm), hot days and wildfire weather (Fire Weather Index). The run also writes
+`pipeline_output/sites/sites.geojson` (fields such as `tx_max_2025_2035`,
+`tx_max_change`, the same for `rx1day`, `hot_days`, `fwi`). Then follow Map.
 
-The run also writes `pipeline_output/sites/sites.geojson`: one point per site with
-its `title` (site and city), `site`, `city` when known, and its early, late and change values per hazard (`tx_max_2025_2035`,
-`tx_max_2070_2080`, `tx_max_change` and the same for `rx1day`, `hot_days`, `fwi`).
+Next step: "This free data covers one high-emissions future. For other futures,
+a historical baseline or financial impact, try a
+[CDT Express trial](https://velo.riskthinking.ai/cdt-express)."
 
-**Map and files.** Build one self-contained HTML map of the sites on crc-viz's
-hazard map, coloured by the change in hottest day; every numeric field is offered
-as a colour field in the map's settings. Use this script, not a map of your own,
-and keep the **Settings** control floating over the map's upper-right corner (the
-script does this):
+### Route 3: neither available
+
+Do not estimate or recall numbers. In two sentences say what the screening would
+show, then offer:
+
+- **Free:** the
+  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/notebooks/which_sites_are_most_at_risk.ipynb)
+  (replace `SITES` in the first cell, then Runtime → Run all).
+- **Every future, in this chat:** connect CDT Express, a custom connector named
+  **CDT Express** at `https://mcp.riskthinking.ai/mcp` (Claude: Customize →
+  Connectors → + Add → Add custom connector; ChatGPT: Plugins → + → Add custom
+  MCP server; [setup guide](https://github.com/RiskThinking/cdt-express-mcp#connect-by-url-recommended);
+  [trial](https://velo.riskthinking.ai/cdt-express)).
+
+If downloads fail, the sandbox likely blocks the network: ask to allow
+`pypi.org`, `raw.githubusercontent.com`, `data.riskthinking.ai`, or use Route 3.
+
+## Map (every route with sites; deliver it without being asked)
+
+The Route 2 pipeline already builds the map and prints `Live map:`, `Map:` and
+`GeoJSON:` lines. If a line is missing, or the data came from Route 1, run
+(inside a checkout use `tools/build_map_page.py`):
 
 ```sh
 curl -fsSL -o build_map_page.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/tools/build_map_page.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/tools/build_map_page.py
 python build_map_page.py pipeline_output/sites/sites.geojson --link
 python build_map_page.py pipeline_output/sites/sites.geojson \
   --output pipeline_output/sites/map --title "Sites on the CRC map"
 ```
 
-(Inside a crc-docs checkout use `tools/build_map_page.py`; the pipeline already
-writes the page and prints `Live map:` and `Map:` lines. If either line is
-missing from its output, run the commands above yourself before answering. The
-live link is very long: copy it from the output without editing, never
-truncate it, and if it is cut off, read it from `live_map_link.txt` next to the
-GeoJSON, or attach `live_map.html`, which opens the map when opened in a browser.)
+Always use this script, never a map of your own; keep its Settings control
+overlaid top-right. No coordinates means no map: say so.
 
-**Always deliver all three outputs whenever you have sites to map, on any data
-route, without being asked:**
-
-1. **Live map link.** `--link` prints `Live map: https://riskthinking.github.io/crc-docs/map/#...`,
-   a link to the hosted map viewer with every site packed into the text after
-   the `#`. Give it as a clickable link, copied exactly and in full, never
-   shortened or retyped. Do not start a local server, and do not show or embed
-   the map in a preview panel or the chat: it only works in a real browser tab.
-2. **Downloadable map file.** The second command writes `index.html` (about 3 MB,
-   everything inline) to `pipeline_output/sites/map/index.html`. Offer it as a
-   file to download in case the link fails, and say it opens in Chrome, Safari
-   or Firefox and needs internet for the basemap.
-3. **Downloadable GeoJSON.** Offer `pipeline_output/sites/sites.geojson` (one
-   point per site with its values) as a second file to download, and say it also
-   opens in QGIS, geojson.io or Kepler.gl.
-
-The live map link is the one link you do write, and it must be in the answer text, never only in an attached file: the pipeline prints it as a ready-made `- [Open the live map](...)` line; paste that line unchanged as the first bullet of the **Map and files** list.
-
-If you run in a sandbox, the pipeline copies the map file and the GeoJSON into
-the chat's downloads folder (`/mnt/data` in ChatGPT, `/mnt/user-data/outputs` in
-Claude) and prints a `Download file:` line for each. The chat then shows each
-one as its own download button. **Do not write a link for these files**: a
-markdown link to a file path, including `sandbox:/mnt/data/...`, opens the
-sandbox instead of downloading. Name each file in plain text with one short
-description (for example "warehouses-map.html: opens in Chrome, Safari or
-Firefox; needs internet for the basemap") and say the download buttons are
-below. If a command above ran without the pipeline, copy the two files into that
-folder yourself with descriptive names (for example `warehouses-map.html`, `warehouses-sites.geojson`). If there is
-no downloads folder and you cannot attach files, say so in one sentence, rely on
-the live map link and give the paths as plain text. If you cannot run the script, say
-so and still give the path to `sites.geojson`. Never claim a map was shown or a
-file was provided if it was not. On the CDT route the same two commands work on
-the `sites.geojson` you wrote; if you have no coordinates, say there is no map.
-
-If a download is blocked, the sandbox probably limits internet access. Say so,
-and suggest allowing `pypi.org`, `raw.githubusercontent.com` and
-`data.riskthinking.ai`, or use Route 3.
-
-### Route 3: neither is available
-
-Do not estimate or recall numbers. Explain in two sentences what the screening
-would show, then offer both options:
-
-- **Free, no setup:** open the
-  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/which_sites_are_most_at_risk.ipynb),
-  replace `SITES` in the first cell with the list and choose **Runtime → Run all**.
-- **Every emissions future, in this chat:** connect CDT Express. Add a custom
-  connection named **CDT Express** with the URL `https://mcp.riskthinking.ai/mcp`
-  and sign in (Claude: **Customize → Connectors → + Add → Add custom connector**;
-  ChatGPT: **Plugins → + → Add custom MCP server**; full steps in the
-  [setup guide](https://github.com/RiskThinking/cdt-express-mcp#connect-by-url-recommended)).
-  A [CDT Express trial](https://velo.riskthinking.ai/cdt-express) provides access.
-
-## 3. Answer
-
-1. **Headline**, for example: "Of your ten warehouses, Toronto's hottest days
-   warm the most (+4.2 °C by 2070–2080), Phoenix gains the most hot days (+95)
-   and Atlanta's heaviest rain grows the most (+20 mm)."
-2. **Table:** one row per site, one column per hazard showing the change, with
-   units. Sort by the hazard the person cares about, or by hottest-day change.
-3. **Chart**, when you can draw one: for one hazard, a line per site from its
-   early value to its late value (or historical to future), sorted by the change.
-   On every route that has sites, follow the chart with a **Map and files** block
-   listing the live map link, the downloadable `index.html` map and the
-   downloadable `sites.geojson`, as described under Route 2. Include it every time.
-4. **How sure are we**, one or two lines: values describe an area of about
-   250 km² around each site, not the building; they come from climate models;
-   being exposed is not the same as being damaged, which also depends on the
-   building and how it is used.
-5. **Next step**, one line matching the route:
-   - Route 1: offer to compare emissions futures, add more hazards, or estimate
-     financial impact on the buildings with the same connection.
-   - Route 2: "This free data covers one high-emissions future. For other futures,
-     a historical baseline or financial impact, try a
-     [CDT Express trial](https://velo.riskthinking.ai/cdt-express)."
+- **Live link:** paste the pipeline's `- [Open the live map](...)` line unchanged
+  as the first bullet of **Map and files**, in the answer text. Never shorten,
+  retype or truncate it; if cut off, read it from `live_map_link.txt` next to the
+  GeoJSON. Never attach `live_map.html`. Do not start a server or embed the map in the chat:
+  it only works in a browser tab.
+- **Map file:** `pipeline_output/sites/map/index.html` (about 3 MB); opens in
+  Chrome, Safari or Firefox and needs internet for the basemap.
+- **GeoJSON:** `pipeline_output/sites/sites.geojson`, one point per site with its
+  values; also opens in QGIS, geojson.io or Kepler.gl.
 
 ## Rules
 
-- Never invent or guess numbers. Report missing data as missing, not as safe.
-- Rank by the data, one hazard at a time; don't combine hazards into a made-up
-  overall score.
-- Name the source: "Riskthinking.AI Climate Digital Twin (CDT)" (licensed), or
+- Never invent or guess numbers; report missing data as missing, not as safe.
+- Rank by the data, one hazard at a time; no made-up overall score.
+- Source line: "Riskthinking.AI Climate Digital Twin (CDT)" (licensed), or
   "CRC Open by Riskthinking.AI, CC BY-NC 4.0" (free for non-commercial use).
-- SSP5-8.5 is a high-emissions future, not a prediction of what will happen.
-- Don't present a horizon such as 2080 as a weather forecast for that year; it
-  describes typical conditions around that time.
-- Don't ask for or display API keys; CDT access uses the connector's sign-in.
+- SSP5-8.5 is a high-emissions future, not a prediction. A horizon such as 2080
+  is typical conditions around then, not a forecast for that year.
+- Never ask for or show API keys; CDT uses the connector's sign-in.
