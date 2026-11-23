@@ -26,8 +26,9 @@ Never ask for identifiers or technical options.
    - Route 2: groups are wind, rain, heat, total; two bars each, 2023-2036 and
      2068-2081 expected yearly damage (% of building value).
 
-   Use exactly these hex colours, light to dark: Route 1 `#fa9b75`, `#ef3b2c`,
-   `#a50f15`; Route 2 `#fa9b75`, `#cb181d`. No other colours. Label axes with
+   Use exactly these hex colours, light to dark (from `IMPACT_RISK_COLOURS` in
+   `assets/impact_risk_colours.json`): Route 1 `#fa9b75`, `#ef3b2c`, `#a50f15`;
+   Route 2 `#fa9b75`, `#cb181d`. No other colours. Label axes with
    units and title the chart with the company. Draw it wide (e.g. 12 x 5 inches
    at 120 dpi), with readable labels and minimal margins.
 

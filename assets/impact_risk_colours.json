@@ -1,0 +1,12 @@
+{
+  "HIGH_OPPORTUNITY": "#fed6c3",
+  "MODERATE_OPPORTUNITY": "#feba9a",
+  "OPPORTUNITY_ORIENTED": "#fa9b75",
+  "RISK_ORIENTED": "#fc845f",
+  "MODERATE_RISK": "#fb5b37",
+  "INTERMEDIATE_RISK": "#ef3b2c",
+  "ELEVATED_RISK": "#e41d24",
+  "HIGH_RISK": "#cb181d",
+  "HIGHER_RISK": "#a50f15",
+  "VERY_HIGH_RISK": "#67000d"
+}
