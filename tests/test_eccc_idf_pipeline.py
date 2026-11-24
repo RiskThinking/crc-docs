@@ -1,179 +1,95 @@
-"""Published rainfall, fit accuracy and release auditing share one offline cache."""
+"""Published IDF rates, their confidence half-widths and the Gumbel refit."""
 
-import hashlib
 import math
 
-import pyarrow.parquet as pq
+import pyarrow as pa
 import pytest
-from crc_sdk.providers import eccc_idf
+from crc_framework import (
+    Aggregation,
+    Duration,
+    PrecipitationRate,
+    PrecipitationRateUnit,
+    Tail,
+    TimeUnit,
+)
+from crc_sdk import Dataset, Period, Probability, StationReference, Variable
 
-from pipelines.eccc_idf_pipeline import run
+from pipelines import eccc_idf_pipeline
+
+PERIODS = [2.0, 5.0, 10.0, 25.0, 50.0, 100.0]
+STATIONS = [
+    StationReference(
+        "6158731", "TORONTO INTL A", -79.63, 43.68, Period.window(1950, 2020)
+    ),
+    StationReference("6106000", "OTTAWA CDA", -75.72, 45.38, Period.window(2000, 2020)),
+]
 
 
-@pytest.mark.parametrize("selection", ["stations", "areas"])
-def test_pipeline_preserves_source_and_audits_release_support(
-    tmp_path, monkeypatch, selection
-):
-    calls = []
-
-    def fetch(version, province, stations):
-        calls.append((version, province, tuple(stations)))
-        periods = [2, 5, 10, 25, 50, 100] + ([200] if version == "3.40" else [])
-        year = 1980 if version == "3.40" else 1970
-        latitude = "43 40'N" if version == "3.40" else "43 41'N"
-        lines = [
-            "SYNTHETIC A                 ON        6158731",
-            f"Latitude: {latitude}    Longitude: 79 38'W",
-            f"Years/Années : {year} - 2020",
-            "Table 2b :",
-            "Duration/Durée  " + " ".join(map(str, periods)) + " #Years",
-        ]
-        for duration, minutes in eccc_idf.DURATIONS.items():
-            rates = [
-                (20 - 5 * math.log(-math.log(1 - 1 / t))) * 60 / minutes
-                for t in periods
-            ]
-            label = duration.replace("min", " min").replace("h", " h")
-            lines += [
-                label + " " + " ".join(f"{v:.1f}" for v in rates) + " 40",
-                " ".join(["+/- 1.0"] * len(periods)) + " 40",
-            ]
-        lines.append("Table 3")
-        raw = "\n".join(lines).encode("cp1252")
-        yield (
-            "6158731",
-            raw,
-            {
-                "checksum": hashlib.sha256(raw).hexdigest(),
-                "url": "https://example.test/idf.zip",
-                "member": "synthetic.txt",
-            },
-        )
-
-    monkeypatch.setattr(eccc_idf, "fetch_stations", fetch)
-    boxes = [(-79.65, 43.65, -79.61, 43.70), (-79.64, 43.66, -79.62, 43.71)]
-    kwargs = {"areas": [*boxes, boxes[0]]} if selection == "areas" else {}
-    summary = run(tmp_path, compare_version="3.20", **kwargs)
-    assert summary["stations"] == ["6158731"]
-    assert summary["areas"] == (tuple(boxes) if selection == "areas" else ())
-    assert all(
-        call[2] == (() if selection == "areas" else ("6158731",)) for call in calls
-    )
-    assert len(calls) == 2
-    assert summary["rate_rows"] == 39 and summary["comparison_rows"] == 18
-    assert summary["maximum_absolute_fit_residual_mm_h"] < 0.15
-    rates = pq.read_table(tmp_path / "rainfall_rates.parquet").to_pylist()
-    assert any(r["return_period_years"] == 200 for r in rates)
-    assert any(r["beyond_record_length"] for r in rates)
-    one_hour = next(r for r in rates if r["duration_minutes"] == 60)
-    assert one_hour["published_mm_h"] == one_hour["published_duration_depth_mm"]
-    changes = pq.read_table(tmp_path / "release_changes.parquet").to_pylist()
-    assert all(r["record_changed"] and r["coordinates_changed"] for r in changes)
-    assert all(r["change_percent"] == 0 for r in changes)
-    assert all(r["return_period_years"] != 200 for r in changes)
-
-    def no_network(*args, **kwargs):
-        raise AssertionError("offline replay must use verified source bytes")
-
-    monkeypatch.setattr(eccc_idf, "fetch_stations", no_network)
-    assert (
-        run(tmp_path, compare_version="3.20", cache_mode="offline", **kwargs)[
-            "rate_rows"
-        ]
-        == 39
+def published() -> Dataset:
+    """Exact Gumbel rates (location 20, scale 5 mm/h), one knot per period."""
+    rows = {
+        k: [] for k in ("support_id", "longitude", "latitude", "probability", "value")
+    }
+    for station in STATIONS:
+        for period in PERIODS:
+            q = 1 - 1 / period
+            rows["support_id"].append(station.id)
+            rows["longitude"].append(station.longitude)
+            rows["latitude"].append(station.latitude)
+            rows["probability"].append(q)
+            rows["value"].append(20 - 5 * math.log(-math.log(q)))
+    return Dataset.from_quantiles(
+        rows,
+        variable=Variable(
+            "eccc_idf:rainfall_rate:60min",
+            measurement=PrecipitationRate(
+                unit=PrecipitationRateUnit.MILLIMETRES_PER_HOUR,
+                accumulation_duration=Duration(1, unit=TimeUnit.HOUR),
+                aggregation=Aggregation.MAXIMUM,
+            ),
+        ),
+        probability=Probability.annual(tail=Tail.UPPER),
     )
 
 
-def test_station_and_area_selection_are_mutually_exclusive(tmp_path):
-    with pytest.raises(ValueError, match="not both"):
-        run(tmp_path, stations=("6158731",), areas=[(-80, 43, -79, 44)])
-
-
-def test_cli_passes_repeated_bounds_as_one_area_selection(monkeypatch):
-    import sys
-
-    from pipelines import eccc_idf_pipeline
-
-    captured = {}
-
-    def run(output, **kwargs):
-        captured.update(kwargs)
-        return {}
-
-    monkeypatch.setattr(eccc_idf_pipeline, "run", run)
-    monkeypatch.setattr(
-        sys,
-        "argv",
+def test_audit_matches_published_rates_and_refit():
+    intervals = pa.Table.from_pylist(
         [
-            "eccc_idf_pipeline.py",
-            "--bounds",
-            "-80",
-            "43",
-            "-79",
-            "44",
-            "--bounds",
-            "-78",
-            "45",
-            "-77",
-            "46",
-        ],
-    )
-    eccc_idf_pipeline.main()
-    assert captured["stations"] is None
-    assert captured["areas"] == [[-80, 43, -79, 44], [-78, 45, -77, 46]]
-
-
-def test_empty_fits_produce_typed_rates_and_null_residual(tmp_path, monkeypatch):
-    import json
-    from types import SimpleNamespace
-
-    import pyarrow as pa
-
-    from pipelines import eccc_idf_pipeline
-
-    class EmptyPlan:
-        requested_areas = ()
-
-        def for_areas(self, areas):
-            self.requested_areas = tuple(areas)
-            return self
-
-        def cache(self, *args, **kwargs):
-            return self
-
-        def explain(self):
-            return "empty selection"
-
-        def prefetch(self):
-            return SimpleNamespace(cache_hits=0, cache_misses=0)
-
-        def duration(self, duration):
-            return self
-
-        def canonicalize(self, **kwargs):
-            return self
-
-        def source_curves(self):
-            return pa.table({"station": pa.array([], type=pa.string())})
-
-        def materialize(self, path):
-            pq.write_table(
-                pa.table({"source_id": pa.array([], type=pa.string())}), path
-            )
-
-    monkeypatch.setattr(
-        eccc_idf_pipeline.HazardDataset, "eccc_idf", lambda *a, **k: EmptyPlan()
-    )
-    summary = run(tmp_path, areas=[(-80, 43, -79, 44)], durations=("1h",))
-    rates = pq.read_table(tmp_path / "rainfall_rates.parquet")
-    assert rates.num_rows == 0
-    assert rates.schema.field("published_mm_h").type == pa.float64()
-    assert rates.schema.field("station").type == pa.string()
-    assert summary["rate_rows"] == 0
-    assert summary["maximum_absolute_fit_residual_mm_h"] is None
-    assert (
-        json.loads((tmp_path / "summary.json").read_text())[
-            "maximum_absolute_fit_residual_mm_h"
+            {
+                "support_id": "6158731",
+                "coordinate": {"kind": "return_period", "time": None, "years": 100.0},
+                "interval": {"confidence": 0.95, "lower": 35.0, "upper": 45.0},
+            }
         ]
-        is None
     )
+    rows = eccc_idf_pipeline.audit_duration(
+        published(), STATIONS, "1h", PERIODS, intervals
+    )
+    assert len(rows) == len(STATIONS) * len(PERIODS)
+    toronto = {r["return_period_years"]: r for r in rows if r["station"] == "6158731"}
+    assert toronto[100.0]["published_mm_h"] == pytest.approx(43.0, abs=0.01)
+    assert toronto[100.0]["confidence_95_half_width_mm_h"] == pytest.approx(5.0)
+    assert toronto[2.0]["confidence_95_half_width_mm_h"] is None
+    assert all(abs(r["fit_residual_mm_h"]) < 1e-6 for r in rows)
+    ottawa = {r["return_period_years"]: r for r in rows if r["station"] == "6106000"}
+    assert ottawa[25.0]["beyond_record_span"] is True
+    assert toronto[50.0]["beyond_record_span"] is False
+    depth = toronto[2.0]["published_duration_depth_mm"]
+    assert depth == pytest.approx(toronto[2.0]["published_mm_h"])
+
+
+def test_station_selection_by_id_box_or_all():
+    choose = eccc_idf_pipeline.choose_stations
+    assert [s.id for s in choose(STATIONS, ["6106000"])] == ["6106000"]
+    boxes = [(-79.7, 43.6, -79.6, 43.7), (-79.65, 43.65, -79.6, 43.7)]
+    assert [s.id for s in choose(STATIONS, areas=boxes)] == ["6158731"]
+    assert len(choose(STATIONS)) == 2
+    with pytest.raises(ValueError, match="unknown"):
+        choose(STATIONS, ["0000000"])
+    with pytest.raises(ValueError, match="no ECCC IDF station"):
+        choose(STATIONS, areas=[(0, 0, 1, 1)])
+
+
+def test_durations_map_to_typed_values():
+    assert eccc_idf_pipeline.duration_of("15min") == Duration(900, unit=TimeUnit.SECOND)
+    assert eccc_idf_pipeline.duration_of("24h") == Duration(24, unit=TimeUnit.HOUR)
