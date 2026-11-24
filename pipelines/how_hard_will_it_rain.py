@@ -66,6 +66,11 @@ TRIAL = "https://velo.riskthinking.ai/cdt-express"
 RP_GRID = np.geomspace(1.2, 100, 200)
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def levels_dict(levels: Any) -> dict[int, float]:
     return dict(zip(RETURN_PERIODS, np.round(levels, 1).tolist(), strict=True))
 
@@ -341,7 +346,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     args = parser.parse_args(argv)
 
     args.output.mkdir(parents=True, exist_ok=True)
-    runtime = Runtime(cache=Cache.reuse(args.output / "cache"))
+    runtime = Runtime(cache=Cache.reuse(source_cache(args.output)))
 
     era5 = (
         {"available": False, "reason": "skipped"}

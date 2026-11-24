@@ -1,0 +1,155 @@
+name: Live data
+
+# Runs the notebooks and pipelines against the real public services. Upstream
+# outages and data changes are not caused by a pull request, so this runs on a
+# schedule instead of gating merges: the pipelines nightly, the notebooks
+# weekly. Run it by hand on any branch with
+#   gh workflow run live.yml --ref <branch> [-f notebooks=true]
+
+on:
+  schedule:
+    - cron: "17 6 * * *" # nightly: pipelines
+    - cron: "47 6 * * 1" # Mondays: notebooks too
+  workflow_dispatch:
+    inputs:
+      notebooks:
+        description: Also execute every CI notebook (about 30 minutes)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CRC_DOCS_LIVE: "1"
+  # Upstream services rate-limit and drop connections; rerun only those
+  # failures, after a pause, and report every test's duration. -v prints each
+  # test as it starts, so a timeout shows which one hung.
+  PYTEST_LIVE: >-
+    -v tests/test_live.py --durations=0
+    --reruns 2 --reruns-delay 60
+    --only-rerun "HTTP Error (429|5[0-9][0-9])"
+    --only-rerun "URLError|ConnectionError|RemoteDisconnected|IncompleteRead"
+    --only-rerun "TimeoutError|timed out|Too Many Requests"
+
+jobs:
+  pipelines:
+    name: Pipelines
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Install locked environment
+        run: uv sync --locked
+
+      # Saved even when a test fails, so the next run does not fetch it again.
+      - name: Restore downloaded data
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ runner.temp }}/crc-cache
+          key: live-pipelines-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: live-pipelines-
+
+      - name: Run the pipelines (small CI configuration)
+        env:
+          CRC_DOCS_CACHE: ${{ runner.temp }}/crc-cache
+        run: eval uv run pytest $PYTEST_LIVE -k "'not test_notebook_executes'"
+
+      - name: Save downloaded data
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ runner.temp }}/crc-cache
+          key: live-pipelines-${{ github.run_id }}-${{ github.run_attempt }}
+
+  notebooks:
+    name: Notebooks (shard ${{ matrix.shard }}/4)
+    if: >-
+      github.event.schedule == '47 6 * * 1' ||
+      (github.event_name == 'workflow_dispatch' && inputs.notebooks)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Install locked environment
+        run: uv sync --locked
+
+      - name: Install Chrome for static chart previews
+        run: uv run plotly_get_chrome -y
+
+      - name: Restore downloaded data
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            notebooks/data
+            pipeline_output/*/cache
+            ${{ runner.temp }}/crc-cache
+          key: live-notebooks-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: live-notebooks-${{ matrix.shard }}-
+
+      - name: Execute the notebooks (small CI configuration)
+        env:
+          CRC_DOCS_SHARD: ${{ matrix.shard }}
+          CRC_DOCS_SHARDS: "4"
+          CRC_DOCS_EXECUTED_DIR: ${{ runner.temp }}/executed
+          CRC_DOCS_CACHE: ${{ runner.temp }}/crc-cache
+        run: eval uv run pytest $PYTEST_LIVE -k test_notebook_executes
+
+      - name: Save downloaded data
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            notebooks/data
+            pipeline_output/*/cache
+            ${{ runner.temp }}/crc-cache
+          key: live-notebooks-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload executed notebooks
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: executed-notebooks-${{ matrix.shard }}
+          path: ${{ runner.temp }}/executed
+          if-no-files-found: ignore
+
+  report:
+    name: Report scheduled failures
+    needs: [pipelines, notebooks]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Live data checks are failing"
+          number=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          body="Scheduled live run failed: $RUN_URL"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

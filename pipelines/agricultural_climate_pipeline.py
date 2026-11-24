@@ -62,6 +62,11 @@ WARNINGS = (
 )
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def _bounds(values: Sequence[float]) -> Bounds:
     west, south, east, north = values
     return Bounds(west=west, south=south, east=east, north=north)
@@ -409,7 +414,7 @@ def main(argv: Sequence[str] | None = None) -> dict[str, Any]:
     args = parse_args(argv)
     output = args.output_dir
     output.mkdir(parents=True, exist_ok=True)
-    runtime = Runtime(cache=CACHES[args.cache_mode](output / "cache"))
+    runtime = Runtime(cache=CACHES[args.cache_mode](source_cache(output)))
     if args.hazard is not None:
         hazard = Dataset.open(args.hazard)
     else:

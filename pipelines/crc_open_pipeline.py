@@ -48,6 +48,11 @@ NOTE = (
 )
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def load_assets(path: Path | None) -> pa.Table:
     if path is None:
         return pa.table(SITES)
@@ -95,7 +100,7 @@ def screen(
 ) -> dict[str, Any]:
     """Evaluate CRC Open Rx1day at the assets for the windows holding ``years``."""
     output.mkdir(parents=True, exist_ok=True)
-    runtime = runtime or Runtime(cache=Cache.reuse(output / "cache"))
+    runtime = runtime or Runtime(cache=Cache.reuse(source_cache(output)))
     source = CRCOpen(catalog=catalog).select(area=area_of(assets), variables=RX1DAY)
     windows = windows_for(source, years, runtime)
     labels = {p.id: f"{p.start}-{p.end}" for p in windows.values()}

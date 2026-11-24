@@ -5,6 +5,8 @@ import os
 import pytest
 
 
+# Run after -k and marker deselection, so each shard splits only selected tests.
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:

@@ -78,6 +78,11 @@ EDO_MINIMUM_YEARS = 20
 EDO_RETURN_PERIODS = (2, 5, 10, 20)
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def licence_of(report: Any) -> str | None:
     for source in report.source_identities:
         for resource in source.resources:
@@ -409,7 +414,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     args = parser.parse_args(argv)
 
     args.output.mkdir(parents=True, exist_ok=True)
-    runtime = Runtime(cache=Cache.reuse(args.output / "cache"))
+    runtime = Runtime(cache=Cache.reuse(source_cache(args.output)))
 
     edo = (
         {"available": False, "reason": "skipped"}

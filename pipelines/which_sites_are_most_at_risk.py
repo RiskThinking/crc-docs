@@ -102,6 +102,11 @@ TRIAL = "https://velo.riskthinking.ai/cdt-express"
 KELVIN = 273.15
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def read_sites(path: Path | None) -> list[dict[str, Any]]:
     if path is None:
         rows = EXAMPLE_SITES
@@ -453,7 +458,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
 
     sites = read_sites(args.sites)
     args.output.mkdir(parents=True, exist_ok=True)
-    runtime = Runtime(cache=Cache.reuse(args.output / "cache"))
+    runtime = Runtime(cache=Cache.reuse(source_cache(args.output)))
 
     era5 = (
         {"available": False, "reason": "skipped"}
