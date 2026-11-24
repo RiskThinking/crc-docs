@@ -62,7 +62,7 @@ def test_usda_units_are_weighted_by_pixels(tmp_path: Path):
         units, hazard({"gauge": (lon, lat)}), [10, 100], tmp_path / "evaluation.parquet"
     )
     map_path, summary_path = pipeline.map_and_summary(
-        "usda", units, evaluation.read().table, tmp_path
+        "usda", units, evaluation, tmp_path
     )
     features = [json.loads(line) for line in map_path.read_text().splitlines()]
     assert len(features) == 3
@@ -109,7 +109,7 @@ def test_ftw_fields_keep_polygons_and_area_weights(tmp_path: Path):
         units, hazard({"pixel": (centre.x, centre.y)}), [10], tmp_path / "e.parquet"
     )
     map_path, summary_path = pipeline.map_and_summary(
-        "ftw", units, evaluation.read().table, tmp_path
+        "ftw", units, evaluation, tmp_path
     )
     first = json.loads(map_path.read_text().splitlines()[0])
     assert first["geometry"]["type"] == "Polygon"
@@ -124,3 +124,18 @@ def test_pmtiles_step_is_optional(tmp_path: Path, monkeypatch):
     layer = tmp_path / "map.geojsonseq"
     layer.write_text("")
     assert pipeline.build_pmtiles(layer, tmp_path / "map.pmtiles") is None
+
+
+def test_usda_cells_keep_their_deepest_pixel(tmp_path: Path):
+    units = usda_units()
+    cell = units["cell"][0].as_py()
+    lat, lon = h3.cell_to_latlng(cell)
+    pixels = hazard({"a": (lon, lat), "b": (lon + 0.002, lat)})
+    rows = pipeline.evaluate_units(
+        units, pixels, [100], tmp_path / "cells.parquet", cell_resolution=7
+    ).to_pylist()
+    covered = [r for r in rows if r["asset_id"].endswith(cell)]
+    assert {r["value"] for r in covered} == {2.0}
+    assert {r["support_id"] for r in covered} == {f"h3:{cell}"}
+    outside = [r for r in rows if not r["asset_id"].endswith(cell)]
+    assert {r["failure"] for r in outside} == {"no_covering_support"}
