@@ -97,6 +97,11 @@ PROPERTY_WINDOWS = {
 }
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def damage_property(hazard: str, window: str) -> str:
     """Map property for one hazard (or "total") and window, e.g. total_damage_2070_2080."""
     return f"{PROPERTY_HAZARDS[hazard]}_damage_{PROPERTY_WINDOWS[window]}"
@@ -697,7 +702,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         parser.error("bounds must be min_lon min_lat max_lon max_lat")
 
     args.output.mkdir(parents=True, exist_ok=True)
-    runtime = Runtime(cache=Cache.reuse(args.output / "cache"))
+    runtime = Runtime(cache=Cache.reuse(source_cache(args.output)))
 
     places = find_locations(args.brand, bounds, args.region, args.category)
     storms: dict[str, Any] = {"available": False, "reason": "skipped"}

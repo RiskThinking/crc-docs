@@ -31,6 +31,11 @@ from crc_sdk import JRC, Assets, Bounds, Cache, Dataset, Runtime
 CACHES = {"reuse": Cache.reuse, "offline": Cache.offline, "refresh": Cache.refresh}
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def support_points(table: pa.Table) -> dict[str, list[Any]]:
     """One point per support: its footprint's centre (or its H3 cell's centre)."""
     seen: dict[str, tuple[float, float]] = {}
@@ -143,7 +148,7 @@ def main(argv: Sequence[str] | None = None) -> dict[str, Any]:
     flood = JRC(product=JRC.Product(args.dataset)).select(
         area=Bounds(west=west, south=south, east=east, north=north)
     )
-    runtime = Runtime(cache=CACHES[args.cache_mode](args.output_dir / "cache"))
+    runtime = Runtime(cache=CACHES[args.cache_mode](source_cache(args.output_dir)))
     summary = {
         "dataset": args.dataset,
         "bounds": list(args.bounds),

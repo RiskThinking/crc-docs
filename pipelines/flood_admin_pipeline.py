@@ -48,6 +48,11 @@ DEFAULT_ADMIN_URL = (
 OVERTURE_CATALOG_URL = "https://stac.overturemaps.org/catalog.json"
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def support_centres(table: pa.Table) -> dict[str, tuple[float, float]]:
     """Centre of each support's footprint, or of its H3 cell when it has none."""
     centres: dict[str, tuple[float, float]] = {}
@@ -216,7 +221,7 @@ def main(argv: Sequence[str] | None = None) -> dict[str, Any]:
             .write(
                 output / "efas_flood.parquet",
                 overwrite=True,
-                runtime=Runtime(cache=CACHES[args.cache_mode](output / "cache")),
+                runtime=Runtime(cache=CACHES[args.cache_mode](source_cache(output))),
             )
         )
     variable = hazard.metadata.spec.variables[0]

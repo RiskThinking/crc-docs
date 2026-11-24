@@ -46,6 +46,11 @@ from crc_sdk import (
 CACHES = {"reuse": Cache.reuse, "offline": Cache.offline, "refresh": Cache.refresh}
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 @dataclass(frozen=True)
 class Options:
     """One source's selection; every field has a per-source default."""
@@ -255,7 +260,7 @@ def run(
     }
     selected = Options(**{**vars(spec.defaults), **chosen})
     output.mkdir(parents=True, exist_ok=True)
-    runtime = Runtime(cache=CACHES[cache_mode](cache or output / "cache"))
+    runtime = Runtime(cache=CACHES[cache_mode](cache or source_cache(output)))
     outputs: dict[str, str] = {}
     artifacts: dict[str, Any] = {}
     for name, recipe in spec.build(selected, runtime).items():

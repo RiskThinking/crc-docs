@@ -81,6 +81,11 @@ ANNUAL_MAXIMUM_FIT = SampleFit(
 )
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     lat1, lon1, lat2, lon2 = map(math.radians, (lat1, lon1, lat2, lon2))
     h = (
@@ -403,7 +408,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     args = parser.parse_args(argv)
 
     args.output.mkdir(parents=True, exist_ok=True)
-    runtime = Runtime(cache=Cache.reuse(args.output / "cache"))
+    runtime = Runtime(cache=Cache.reuse(source_cache(args.output)))
 
     station = station_answer(
         args.latitude, args.longitude, tuple(args.station_years), runtime

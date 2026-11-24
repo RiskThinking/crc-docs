@@ -70,6 +70,11 @@ LEVELS = pa.schema(
 )
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def fit_spec(minimum_years: int, fallback: DistributionFamily) -> SampleFit:
     return SampleFit(
         family=DistributionFamily.GENERALIZED_EXTREME_VALUE,
@@ -192,7 +197,7 @@ def run(
         for tail, (indicator, _) in TAILS.items()
     }
     runtime = Runtime(
-        cache=CACHES[mode](output / "cache"), workers=workers, memory_limit="1GB"
+        cache=CACHES[mode](source_cache(output)), workers=workers, memory_limit="1GB"
     )
     summary = {
         "source": source,

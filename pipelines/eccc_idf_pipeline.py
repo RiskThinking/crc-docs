@@ -84,6 +84,11 @@ SCHEMA = pa.schema(
 )
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def duration_of(label: str) -> Duration:
     minutes = DURATIONS[label]
     if minutes % 60 == 0:
@@ -237,7 +242,7 @@ def run(
     if not durations or len(set(durations)) != len(durations):
         raise ValueError("durations must be nonempty and unique")
     output.mkdir(parents=True, exist_ok=True)
-    runtime = Runtime(cache=CACHES[cache_mode](cache or output / "cache"))
+    runtime = Runtime(cache=CACHES[cache_mode](cache or source_cache(output)))
     region = ECCCIDF.Province(province)
     rows: list[dict[str, Any]] = []
     release = None

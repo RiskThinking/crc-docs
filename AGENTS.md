@@ -36,7 +36,9 @@ CI also packages every skill as an uploadable zip (`tools/package_skills.py`).
   Other files in `pipelines/` back the source notebooks.
 - `tools/build_map_page.py`: turns `locations.geojson` into one self-contained HTML file on the
   crc-viz hazard map (bundle built from the npm package in `tools/crc-viz-bundle`; see its docstring).
-- `tests/`: offline checks, plus live runs behind `CRC_DOCS_LIVE=1`.
+- `tests/`: offline checks, plus live runs behind `CRC_DOCS_LIVE=1`. Pull requests
+  run only the offline checks; `.github/workflows/live.yml` runs the live pipelines
+  nightly and the notebooks weekly, and can be started by hand on any branch.
 
 ## Checks
 
@@ -45,6 +47,12 @@ uv sync --locked --extra velo
 uv run pytest -q
 uv run ruff check pipelines tests tools && uv run ruff format --check pipelines tests tools
 CRC_DOCS_LIVE=1 uv run pytest -q tests/test_live.py   # downloads data
+```
+
+Set `CRC_DOCS_CACHE` to share one source cache across pipeline runs.
+
+```sh
+gh workflow run live.yml --ref <branch> -f notebooks=true   # live run on CI
 ```
 
 ## Rules

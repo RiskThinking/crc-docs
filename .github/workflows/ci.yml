@@ -5,9 +5,6 @@ on:
   push:
     branches:
       - main
-  schedule:
-    # Weekly, so upstream data or package changes surface without a commit.
-    - cron: "17 6 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -44,61 +41,8 @@ jobs:
         run: uv run python tools/package_skills.py
 
       - name: Upload skill packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: skills
           path: dist/skills
 
-  live:
-    name: Live data (shard ${{ matrix.shard }}/4)
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2, 3]
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.1
-
-      - name: Install locked environment
-        run: uv sync --locked
-
-      - name: Install Chrome for static chart previews
-        run: uv run plotly_get_chrome -y
-
-      - name: Restore downloaded data
-        uses: actions/cache@v4
-        with:
-          path: |
-            notebooks/data
-            ~/.cache/crc-sdk
-            pipeline_output/eccc_idf/cache
-          key: live-data-v2-${{ matrix.shard }}-${{ hashFiles('notebooks/**/*.ipynb', 'pipelines/**/*.py', 'uv.lock') }}
-          restore-keys: live-data-v2-${{ matrix.shard }}-
-
-      - name: Execute notebooks and pipelines (small CI configuration)
-        env:
-          CRC_DOCS_LIVE: "1"
-          CRC_DOCS_SHARD: ${{ matrix.shard }}
-          CRC_DOCS_SHARDS: "4"
-          CRC_DOCS_EXECUTED_DIR: ${{ runner.temp }}/executed
-        # Upstream services rate-limit and drop connections; rerun only those
-        # failures, after a pause, and report every test's duration.
-        run: >-
-          uv run pytest -q tests/test_live.py --durations=0
-          --reruns 2 --reruns-delay 60
-          --only-rerun "HTTP Error (429|5[0-9][0-9])"
-          --only-rerun "URLError|ConnectionError|RemoteDisconnected|IncompleteRead"
-          --only-rerun "TimeoutError|timed out|Too Many Requests"
-
-      - name: Upload executed notebooks
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: executed-notebooks-${{ matrix.shard }}
-          path: ${{ runner.temp }}/executed
-          if-no-files-found: ignore

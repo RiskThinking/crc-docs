@@ -53,6 +53,11 @@ FIT = SampleFit(
 )
 
 
+def source_cache(output: Path) -> Path:
+    """Source cache directory: ``CRC_DOCS_CACHE`` when set, else under the output."""
+    return Path(os.environ.get("CRC_DOCS_CACHE") or output / "cache")
+
+
 def centre(geometry: bytes | None, cell: int) -> tuple[float, float]:
     """Longitude and latitude of a footprint's centre, or of its H3 cell."""
     if geometry is not None:
@@ -232,7 +237,7 @@ def main(argv: Sequence[str] | None = None) -> dict[str, Any]:
         area=Bounds(west=west, south=south, east=east, north=north),
         time=Period.window(*args.years),
     )
-    runtime = Runtime(cache=CACHES[args.cache_mode](args.output_dir / "cache"))
+    runtime = Runtime(cache=CACHES[args.cache_mode](source_cache(args.output_dir)))
     summary = {
         "bounds": list(args.bounds),
         "years": list(args.years),
