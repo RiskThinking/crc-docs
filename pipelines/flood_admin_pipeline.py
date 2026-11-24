@@ -125,7 +125,10 @@ def overture_places(
 
     west, south, east, north = bounds
     with duckdb.connect() as con:
-        con.execute("INSTALL httpfs; LOAD httpfs; SET s3_region = 'us-west-2'")
+        con.execute(
+            "INSTALL httpfs; LOAD httpfs; SET s3_region = 'us-west-2'; "
+            "SET enable_progress_bar = false"
+        )
         release = con.execute(
             "SELECT latest FROM read_json_auto(?)", [OVERTURE_CATALOG_URL]
         ).fetchone()[0]

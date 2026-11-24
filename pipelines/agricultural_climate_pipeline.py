@@ -45,7 +45,6 @@ from crc_sdk import (
     Bounds,
     Cache,
     Dataset,
-    EvaluationArtifact,
     FieldsOfTheWorld,
     Period,
     Runtime,
@@ -159,16 +158,108 @@ def ftw_units(
 
 
 def evaluate_units(
-    units: pa.Table, hazard: Dataset, return_periods: Sequence[float], output: Path
-) -> EvaluationArtifact:
-    """Query the hazard at each unit's centre; unmatched units keep failure rows."""
+    units: pa.Table,
+    hazard: Dataset,
+    return_periods: Sequence[float],
+    output: Path,
+    *,
+    cell_resolution: int | None = None,
+) -> pa.Table:
+    """Hazard per unit and return period, in long format (written to ``output``).
+
+    With ``cell_resolution`` (USDA H3 units) and a hazard made of pixel
+    footprints, a unit's value is its cell's deepest pixel, so footprints much
+    smaller than the cell still count. Otherwise each unit is queried at its
+    centre. Units without hazard keep rows with a failure code.
+    """
     if len(hazard.inspect().series) != 1:
         raise ValueError("--hazard must hold exactly one series; select one first")
-    assets = Assets(units.select(["asset_id", "longitude", "latitude"]))
-    return (
-        hazard.evaluate(assets)
-        .return_periods(list(return_periods))
-        .write(output, overwrite=True)
+    queries = list(return_periods)
+    supports = hazard.read().table
+    if cell_resolution is not None and supports["geometry"].null_count == 0:
+        rows = _cell_maxima(units, supports, hazard, queries, cell_resolution)
+    else:
+        assets = Assets(units.select(["asset_id", "longitude", "latitude"]))
+        evaluated = hazard.evaluate(assets).return_periods(queries).read().table
+        rows = evaluated.select(["asset_id", "query_value", "value", "support_id"])
+        rows = rows.append_column(
+            "failure",
+            pa.array(
+                [f["code"] if f else None for f in evaluated["failure"].to_pylist()],
+                pa.string(),
+            ),
+        )
+    _write_parquet(rows, output)
+    return rows
+
+
+def _cell_maxima(
+    units: pa.Table,
+    supports: pa.Table,
+    hazard: Dataset,
+    queries: list[float],
+    resolution: int,
+) -> pa.Table:
+    wanted = set(units["cell"].to_pylist())
+    centres: dict[str, tuple[float, float, str]] = {}
+    for support, geometry in zip(
+        supports["support_id"].to_pylist(), supports["geometry"].to_pylist()
+    ):
+        point = shapely.from_wkb(geometry).centroid
+        cell = h3.latlng_to_cell(point.y, point.x, resolution)
+        if cell in wanted:
+            centres[support] = (point.x, point.y, cell)
+    best: dict[tuple[str, float], float] = {}
+    failed: dict[tuple[str, float], str] = {}
+    if centres:
+        evaluated = (
+            hazard.evaluate(
+                Assets(
+                    {
+                        "support_id": list(centres),
+                        "longitude": [c[0] for c in centres.values()],
+                        "latitude": [c[1] for c in centres.values()],
+                    },
+                    id_column="support_id",
+                )
+            )
+            .return_periods(queries)
+            .read()
+            .table
+        )
+        for row in evaluated.to_pylist():
+            key = (centres[row["asset_id"]][2], row["query_value"])
+            if row["value"] is None:
+                failed.setdefault(key, row["failure"]["code"])
+            else:
+                best[key] = max(row["value"], best.get(key, float("-inf")))
+    covered = {cell for cell, _ in (*best, *failed)}
+    rows = []
+    for unit, cell in zip(units["asset_id"].to_pylist(), units["cell"].to_pylist()):
+        for query in queries:
+            value = best.get((cell, query))
+            rows.append(
+                {
+                    "asset_id": unit,
+                    "query_value": float(query),
+                    "value": value,
+                    "support_id": f"h3:{cell}" if cell in covered else None,
+                    "failure": None
+                    if value is not None
+                    else failed.get((cell, query), "no_covering_support"),
+                }
+            )
+    return pa.Table.from_pylist(
+        rows,
+        schema=pa.schema(
+            [
+                ("asset_id", pa.string()),
+                ("query_value", pa.float64()),
+                ("value", pa.float64()),
+                ("support_id", pa.string()),
+                ("failure", pa.string()),
+            ]
+        ),
     )
 
 
@@ -185,10 +276,10 @@ def map_and_summary(
         values[row["asset_id"]][f"rp{row['query_value']:g}"] = row["value"]
         if row["support_id"] is None:
             coverage[row["asset_id"]] = "outside_hazard"
-        elif row["value"] is None:
-            coverage.setdefault(row["asset_id"], "missing_hazard_value")
+        elif row["value"] is not None:
+            coverage[row["asset_id"]] = "modeled_hazard"
         else:
-            coverage.setdefault(row["asset_id"], "modeled_hazard")
+            coverage.setdefault(row["asset_id"], "missing_hazard_value")
     queries = sorted(
         {key for v in values.values() for key in v}, key=lambda k: float(k[2:])
     )
@@ -338,15 +429,15 @@ def main(argv: Sequence[str] | None = None) -> dict[str, Any]:
     units_path = _write_parquet(
         units, output / f"{args.source}-agricultural-units.parquet"
     )
+    evaluation_path = output / f"{args.source}-hazard-evaluation.parquet"
     evaluation = evaluate_units(
         units,
         hazard,
         args.return_periods,
-        output / f"{args.source}-hazard-evaluation.parquet",
+        evaluation_path,
+        cell_resolution=args.h3_resolution if args.source == "usda" else None,
     )
-    map_path, summary_path = map_and_summary(
-        args.source, units, evaluation.read().table, output
-    )
+    map_path, summary_path = map_and_summary(args.source, units, evaluation, output)
     pmtiles = None
     if not args.skip_pmtiles:
         pmtiles = build_pmtiles(
@@ -354,18 +445,20 @@ def main(argv: Sequence[str] | None = None) -> dict[str, Any]:
             args.pmtiles_output or output / f"{args.source}-crop-hazard.pmtiles",
             args.pmtiles_threads,
         )
-    counts = evaluation.metadata.report.counts
+    matched = {
+        row["asset_id"] for row in evaluation.to_pylist() if row["value"] is not None
+    }
     manifest = {
         "agricultural_source": args.source,
         "bounds_wgs84": list(args.bounds),
         "hazard": str(hazard.path),
         "hazard_variables": [v.id for v in hazard.metadata.spec.variables],
         "units": units.num_rows,
-        "matched_units": counts.matched_assets,
-        "unmatched_units": counts.unmatched_assets,
+        "units_with_hazard_value": len(matched),
+        "units_without_hazard_value": units.num_rows - len(matched),
         "files": {
             str(path): _sha256(path)
-            for path in (units_path, evaluation.path, map_path, summary_path, pmtiles)
+            for path in (units_path, evaluation_path, map_path, summary_path, pmtiles)
             if path is not None
         },
         "warnings": list(WARNINGS),

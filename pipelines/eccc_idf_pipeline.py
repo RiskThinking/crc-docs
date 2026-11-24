@@ -29,15 +29,25 @@ from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-from crc_framework import DistributionFamily, Duration, QuantileFit, TimeUnit
+import shapely
+from crc_framework import (
+    DistributionFamily,
+    Duration,
+    QuantileCurve,
+    QuantileFit,
+    Tail,
+    TimeUnit,
+)
 from crc_sdk import (
     ECCCIDF,
     Assets,
     Cache,
     Dataset,
     FitFailure,
+    Probability,
     Runtime,
     StationReference,
+    decode_curves,
 )
 
 CACHES = {"reuse": Cache.reuse, "offline": Cache.offline, "refresh": Cache.refresh}
@@ -109,6 +119,35 @@ def choose_stations(
     return chosen
 
 
+def published_knots(published: Dataset, supports: set[str | None]) -> Dataset:
+    """The selected stations' published rates as supplied quantile knots to fit."""
+    read = published.read()
+    columns: dict[str, list[Any]] = {
+        name: []
+        for name in ("support_id", "longitude", "latitude", "probability", "value")
+    }
+    table = read.table
+    for support, geometry, curve in zip(
+        table["support_id"].to_pylist(),
+        table["geometry"].to_pylist(),
+        decode_curves(table),
+    ):
+        if support not in supports or not isinstance(curve, QuantileCurve):
+            continue
+        point = shapely.from_wkb(geometry)
+        for probability, value in zip(curve.probabilities, curve.values):
+            columns["support_id"].append(support)
+            columns["longitude"].append(point.x)
+            columns["latitude"].append(point.y)
+            columns["probability"].append(probability)
+            columns["value"].append(value)
+    return Dataset.from_quantiles(
+        columns,
+        variable=read.metadata.spec.variables[0],
+        probability=Probability.annual(tail=Tail.UPPER),
+    )
+
+
 def audit_duration(
     published: Dataset,
     stations: Sequence[StationReference],
@@ -128,7 +167,8 @@ def audit_duration(
     query = list(return_periods)
     exact = published.evaluate(assets).return_periods(query).read().table
     fitted = (
-        published.fit(REFIT, on_failure=FitFailure.KEEP_NO_DATA)
+        published_knots(published, set(exact["support_id"].to_pylist()))
+        .fit(REFIT, on_failure=FitFailure.KEEP_NO_DATA)
         .evaluate(assets)
         .return_periods(query)
         .read()
