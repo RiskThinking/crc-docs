@@ -53,7 +53,7 @@ high-emissions future (SSP5-8.5); other futures are available from
 opensource@riskthinking.ai. Install or update the toolkit, then run the analysis script:
 
 ```sh
-python -m pip install --quiet --upgrade "crc-sdk[geometry]"
+python -m pip install --quiet --upgrade --pre "crc-sdk[netcdf]>=1.0.0a2,<2"
 curl -fsSL -o will_my_farm_get_drier.py \
   https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/will_my_farm_get_drier.py
 python will_my_farm_get_drier.py --name "PLACE" --latitude LAT --longitude LON --skip-edo --skip-cdt
@@ -61,7 +61,7 @@ python will_my_farm_get_drier.py --name "PLACE" --latitude LAT --longitude LON -
 
 If this skill folder contains `scripts/will_my_farm_get_drier.py`, run that copy
 instead of downloading one. Read `pipeline_output/farm/summary.json`: `answer` is
-the headline, and `b_crc_open.measures` holds 2025–2035 and 2070–2080 values for
+the headline, and `b_crc_open.measures` holds 2023–2036 and 2068–2081 values for
 annual rain in a typical and a 1-in-10 dry year (mm), dry days and the longest
 dry spell (days) in a 1-in-10 year.
 

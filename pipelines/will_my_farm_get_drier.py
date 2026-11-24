@@ -3,10 +3,12 @@
 Answers one question three ways and writes a small, self-describing result:
 
 A. JRC European Drought Observatory Soil Moisture Index (Europe only): the
-   fitted curve of each year's driest soil (the measured past).
+   fitted curve of each year's driest soil at the farm's grid cell (the
+   measured past).
 B. CRC Open annual rain (``prcptot``), dry days and longest dry spell
-   (``max_consecutive_dry_days``) for 2025-2035 and 2070-2080 under SSP5-8.5,
-   each window averaged over three horizons.
+   (``max_consecutive_dry_days``) for 2023-2036 and 2068-2081 under
+   SSP5-8.5, each averaged over three four-year periods (CRC Open has no
+   historical baseline).
 C. CDT (Climate Digital Twin) annual rain in a typical and a 1-in-10 dry year,
    historical vs 2070-2090 under three pathways, only when
    ``RISKTHINKING_API_KEY`` is set.
@@ -17,9 +19,10 @@ Run from the repository root:
     uv run python pipelines/will_my_farm_get_drier.py --name "Kansas wheat" --latitude 38.5 --longitude -98.5 --skip-edo
 
 Outputs land in ``--output`` (default ``pipeline_output/farm``): ``summary.json``
-(plain-language answer plus provenance). EDO takes about 30 seconds per year
-and needs 20 complete years. See ``notebooks/will_my_farm_get_drier.ipynb``
-for the explained version.
+(plain-language answer plus provenance). EDO downloads one file per year (about
+a minute each the first time) and needs 20 complete years. Set
+``CRC_OPEN_CATALOG`` to read another CRC Open release index. See
+``notebooks/will_my_farm_get_drier.ipynb`` for the explained version.
 """
 
 from __future__ import annotations
@@ -28,23 +31,37 @@ import argparse
 import json
 import os
 import tempfile
-import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
-from crc_sdk.workflows import (
-    EDODroughtPolicy,
-    HazardDataset,
-    curve_parameters_from_row,
+import shapely
+from crc_framework import DistributionFamily, SampleFit, Tail
+from crc_sdk import (
+    EDO,
+    Assets,
+    Bounds,
+    Cache,
+    CRCOpen,
+    Distance,
+    Period,
+    Probability,
+    ReadResult,
+    Runtime,
+    Samples,
+    SpatialMatch,
+    Variable,
 )
-from shapely import wkb
-from shapely.geometry import Point
 
-EARLY, LATE = (2025, 2030, 2035), (2070, 2075, 2080)
+CRC_OPEN = os.environ.get(
+    "CRC_OPEN_CATALOG", "https://data.riskthinking.ai/crc-open/_CURRENT.json"
+)
+# CRC Open four-year periods containing these years form each window.
+EARLY_YEARS, LATE_YEARS = (2025, 2030, 2035), (2070, 2075, 2080)
+RAIN = CRCOpen.Variable.ANNUAL_TOTAL_WET_DAY_PRECIPITATION.value
+DRY_DAYS = "crc:dry_days"
+DRY_SPELL = CRCOpen.Variable.ANNUAL_MAXIMUM_CONSECUTIVE_DRY_DAYS.value
 CDT_REQUESTS = [("historic", 2010)] + [
     (pathway, horizon)
     for pathway in ("ssp126", "ssp245", "ssp585")
@@ -53,139 +70,244 @@ CDT_REQUESTS = [("historic", 2010)] + [
 MORE_DATA = "mailto:opensource@riskthinking.ai"
 TRIAL = "https://velo.riskthinking.ai/cdt-express"
 RP_GRID = np.geomspace(1.2, 100, 200)
+# Non-exceedance probabilities: typical (0.5) and 1-in-10 dry (0.1) years,
+# the 1-in-10 high value (0.9), and the return-period grid for the dry spell.
+PROBABILITIES = sorted({0.1, 0.5, 0.9, *(1 - 1 / RP_GRID).tolist()})
+DEKADS_PER_YEAR = 36
+EDO_MINIMUM_YEARS = 20
+EDO_RETURN_PERIODS = (2, 5, 10, 20)
 
 
-def upper(distribution: Any, rp: Any) -> np.ndarray:
-    """Value reached or exceeded once every ``rp`` years."""
-    probabilities = (1 - 1 / np.asarray(rp, dtype=float)).tolist()
-    return np.asarray(distribution.quantiles(probabilities), dtype=float)
+def licence_of(report: Any) -> str | None:
+    for source in report.source_identities:
+        for resource in source.resources:
+            if resource.license:
+                return resource.license
+    return None
 
 
-def lower(distribution: Any, rp: Any) -> np.ndarray:
-    """Value at or below which a year falls once every ``rp`` years."""
-    probabilities = (1 / np.asarray(rp, dtype=float)).tolist()
-    return np.asarray(distribution.quantiles(probabilities), dtype=float)
+def edo_annual_minima(
+    observations: ReadResult, latitude: float, longitude: float
+) -> Samples | None:
+    """Annual minimum of complete years at the EDO grid cell holding the farm."""
+    rows = [row for row in observations.table.to_pylist() if row["value"] is not None]
+    if not rows:
+        return None
+    farm = shapely.Point(longitude, latitude)
+    shapes = {row["support_id"]: shapely.from_wkb(row["geometry"]) for row in rows}
+    support = min(
+        shapes,
+        key=lambda s: (not shapes[s].covers(farm), shapes[s].distance(farm)),
+    )
+    years: dict[int, list[float]] = {}
+    for row in rows:
+        if row["support_id"] == support:
+            years.setdefault(int(row["time"][:4]), []).append(row["value"])
+    complete = {
+        year: min(values)
+        for year, values in sorted(years.items())
+        if len(values) == DEKADS_PER_YEAR
+    }
+    if not complete:
+        return None
+    centre = shapes[support].centroid
+    measurement = observations.metadata.spec.variables[0].measurement
+    return Samples.from_table(
+        {
+            "support_id": [support] * len(complete),
+            "longitude": [centre.x] * len(complete),
+            "latitude": [centre.y] * len(complete),
+            "time": list(complete),
+            "value": list(complete.values()),
+        },
+        variable=Variable(
+            "edo:soil_moisture_index_annual_minimum",
+            measurement=measurement,
+            label="Annual minimum of the dekadal Soil Moisture Index",
+        ),
+        probability=Probability.annual(tail=Tail.LOWER),
+    )
+
+
+def edo_summary(
+    observations: ReadResult, latitude: float, longitude: float, runtime: Runtime
+) -> dict[str, Any]:
+    annual = edo_annual_minima(observations, latitude, longitude)
+    if annual is None:
+        return {"available": False, "reason": "no complete soil-moisture years here"}
+    minima = annual.read(runtime=runtime)
+    years = minima.table.num_rows
+    if years < EDO_MINIMUM_YEARS:
+        return {
+            "available": False,
+            "reason": f"{years} complete years, {EDO_MINIMUM_YEARS} needed",
+        }
+    farm = Assets(
+        {"asset_id": ["farm"], "longitude": [longitude], "latitude": [latitude]}
+    )
+    levels = (
+        minima.fit(
+            SampleFit(
+                family=DistributionFamily.GUMBEL_RIGHT,
+                minimum_samples=EDO_MINIMUM_YEARS,
+            )
+        )
+        .evaluate(
+            farm, spatial=SpatialMatch.nearest(max_distance=Distance.kilometres(10))
+        )
+        .return_periods(EDO_RETURN_PERIODS)  # lower tail: q = 1 / T
+        .read(runtime=runtime)
+        .table.to_pylist()
+    )
+    return {
+        "available": True,
+        "grid_cell": minima.table["support_id"][0].as_py(),
+        "complete_years": years,
+        "years": [
+            minima.table["time"][0].as_py(),
+            minima.table["time"][years - 1].as_py(),
+        ],
+        "driest_soil_index": {
+            int(row["query_value"]): round(row["value"], 2)
+            for row in levels
+            if row["value"] is not None
+        },
+        "meaning": (
+            "Soil Moisture Index annual minimum; 1 is field capacity (wet), "
+            "0 is the wilting point"
+        ),
+        "fit": "Gumbel on annual minima, lower tail",
+        "licence": licence_of(observations.report) or "CC-BY-4.0",
+    }
 
 
 def edo_answer(
-    latitude: float, longitude: float, years: tuple[Any, ...], cache: Path
+    latitude: float, longitude: float, years: tuple[int, int] | None, runtime: Runtime
 ) -> dict[str, Any]:
-    """Fit the EDO Soil Moisture Index annual minima near the farm."""
-    plan = (
-        HazardDataset.smi(version="latest")
-        .for_area((longitude - 0.1, latitude - 0.1, longitude + 0.1, latitude + 0.1))
-        .years(*years)
-        .cache(cache / "edo", mode="reuse")
-        .canonicalize(policy=EDODroughtPolicy.curated(h3_resolution=6))
+    """Fit the EDO Soil Moisture Index annual minima at the farm's grid cell."""
+    source = EDO(product=EDO.Product.SOIL_MOISTURE_INDEX).select(
+        area=Bounds(
+            west=longitude - 0.03,
+            south=latitude - 0.03,
+            east=longitude + 0.03,
+            north=latitude + 0.03,
+        )
     )
-    (cache / "smi.parquet").unlink(missing_ok=True)  # EDO plans don't overwrite
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            plan.materialize(cache / "smi.parquet")
+        if years is None:  # every published year; incomplete ones are dropped
+            period = source.inspect(runtime=runtime).series[0].period
+            years = (period.start, period.end)
+        observations = source.select(time=Period.window(*years)).read(runtime=runtime)
     except (ValueError, LookupError) as error:  # e.g. outside Europe
         return {"available": False, "reason": str(error)}
-    rows = [
-        row
-        for row in pq.read_table(cache / "smi.parquet").to_pylist()
-        if row["curve_kind"] != "no_data"
-    ]
-    if not rows:
-        return {"available": False, "reason": "no soil-moisture curve near the farm"}
-    farm = Point(longitude, latitude)
-    row = min(
-        rows,
-        key=lambda row: (
-            wkb.loads(row["source_geometry"]).distance(farm)
-            if row["source_geometry"]
-            else 0
-        ),
-    )
-    soil = curve_parameters_from_row(row).to_distribution()
-    return {
-        "available": True,
-        "driest_soil_index": {
-            rp: round(float(lower(soil, [rp])[0]), 2) for rp in (2, 5, 10, 20)
-        },
-        "meaning": "Soil Moisture Index annual minimum; 0 is normal, below 0 is drier",
-        "licence": "CC-BY-4.0 (JRC EDO)",
-    }
+    return edo_summary(observations, latitude, longitude, runtime)
 
 
-def crc_open_curves(
-    name: str, latitude: float, longitude: float, hazard: str, cache: Path
-) -> dict[int, Any]:
-    plan = (
-        HazardDataset.crc_open()
-        .for_area(
-            (longitude - 0.05, latitude - 0.05, longitude + 0.05, latitude + 0.05)
+def windows(periods: list[Period]) -> dict[str, list[Period]]:
+    """The early and late groups of CRC Open periods, labelled by their span."""
+    groups = {}
+    for years in (EARLY_YEARS, LATE_YEARS):
+        chosen = sorted(
+            {
+                period.id: period
+                for period in periods
+                if period.start is not None
+                and any(period.start <= year <= period.end for year in years)
+            }.values(),
+            key=lambda period: period.start,
         )
-        .hazards([hazard])
-        .horizons(list(EARLY + LATE))
-        .cache(cache / "crc-open", mode="reuse")
-    )
-    farm = pa.table(
-        {"asset_id": [name], "longitude": [longitude], "latitude": [latitude]}
-    )
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        plan.for_assets(farm).return_periods([2]).write_parquet(
-            cache / f"farm_{hazard}.parquet"
-        )
-        plan.materialize(cache / f"{hazard}.parquet")
-    cells = (
-        pq.read_table(cache / f"farm_{hazard}.parquet").column("cell_index").to_pylist()
-    )
-    return {
-        row["horizon"]: curve_parameters_from_row(row).to_distribution()
-        for row in pq.read_table(cache / f"{hazard}.parquet").to_pylist()
-        if cells and row["cell_index"] == cells[0] and row["curve_kind"] != "no_data"
-    }
-
-
-def window(curves: dict[int, Any], horizons: tuple[int, ...], side: Any, rp: Any):
-    return np.mean([side(curves[h], rp) for h in horizons if h in curves], axis=0)
+        if chosen:
+            groups[f"{chosen[0].start}-{chosen[-1].end}"] = chosen
+    return groups
 
 
 def crc_open_answer(
-    name: str, latitude: float, longitude: float, cache: Path
+    name: str, latitude: float, longitude: float, runtime: Runtime
 ) -> dict[str, Any]:
     """CRC Open dry-weather measures, early vs late window."""
+    source = CRCOpen(catalog=CRC_OPEN).select(
+        variables=[RAIN, DRY_DAYS, DRY_SPELL],
+        area=Bounds(
+            west=longitude - 0.01,
+            south=latitude - 0.01,
+            east=longitude + 0.01,
+            north=latitude + 0.01,
+        ),
+    )
+    farm = Assets(
+        {"asset_id": [name], "longitude": [longitude], "latitude": [latitude]}
+    )
     try:
-        rain = crc_open_curves(name, latitude, longitude, "prcptot", cache)
-        dry = crc_open_curves(name, latitude, longitude, "dry_days", cache)
-        spell = crc_open_curves(
-            name, latitude, longitude, "max_consecutive_dry_days", cache
+        inventory = source.inspect(runtime=runtime)
+        groups = windows(
+            list({s.period.id: s.period for s in inventory.series}.values())
         )
-    except (ValueError, LookupError) as error:
+        if len(groups) != 2:
+            return {
+                "available": False,
+                "reason": "CRC Open lacks the early or late periods",
+            }
+        selected = [period for group in groups.values() for period in group]
+        evaluation = (
+            source.select(periods=selected)
+            .evaluate(farm)
+            .probabilities(PROBABILITIES)
+            .read(runtime=runtime)
+        )
+    except (ValueError, LookupError) as error:  # e.g. no release index or cell here
         return {"available": False, "reason": str(error)}
-    if not (rain and dry and spell):
-        return {"available": False, "reason": "missing CRC Open curves at this farm"}
-    measures = {
-        "annual_rain_typical_mm": (rain, lower, 2),
-        "annual_rain_1_in_10_dry_mm": (rain, lower, 10),
-        "dry_days_1_in_10": (dry, upper, 10),
-        "longest_dry_spell_1_in_10_days": (spell, upper, 10),
+    values: dict[tuple[str, str], dict[float, float]] = {}
+    for row in evaluation.table.to_pylist():
+        if row["value"] is not None:
+            values.setdefault((row["variable_id"], row["period_id"]), {})[
+                row["query_value"]
+            ] = row["value"]
+
+    def window(variable: str, label: str, probabilities: list[float]) -> np.ndarray:
+        curves = [
+            [values[(variable, period.id)][p] for p in probabilities]
+            for period in groups[label]
+            if (variable, period.id) in values
+        ]
+        if not curves:
+            raise LookupError(f"no CRC Open {variable} curve at this farm")
+        return np.mean(curves, axis=0)
+
+    early, late = groups
+    measures_spec = {
+        "annual_rain_typical_mm": (RAIN, 0.5),
+        "annual_rain_1_in_10_dry_mm": (RAIN, 0.1),
+        "dry_days_1_in_10": (DRY_DAYS, 0.9),
+        "longest_dry_spell_1_in_10_days": (DRY_SPELL, 0.9),
     }
-    values = {}
-    for key, (curves, side, rp) in measures.items():
-        early = float(window(curves, EARLY, side, [rp])[0])
-        late = float(window(curves, LATE, side, [rp])[0])
-        values[key] = {
-            "2025-2035": round(early, 1),
-            "2070-2080": round(late, 1),
-            "change_percent": round(100 * (late / early - 1), 1),
-        }
-    threshold = values["longest_dry_spell_1_in_10_days"]["2025-2035"]
-    late_levels = window(spell, LATE, upper, RP_GRID)
-    late_rp = float(np.exp(np.interp(threshold, late_levels, np.log(RP_GRID))))
+    try:
+        measures = {}
+        for key, (variable, probability) in measures_spec.items():
+            first = float(window(variable, early, [probability])[0])
+            second = float(window(variable, late, [probability])[0])
+            measures[key] = {
+                early: round(first, 1),
+                late: round(second, 1),
+                "change_percent": round(100 * (second / first - 1), 1),
+            }
+        grid = (1 - 1 / RP_GRID).tolist()
+        late_spell = window(DRY_SPELL, late, grid)
+    except LookupError as error:
+        return {"available": False, "reason": str(error)}
+    threshold = measures["longest_dry_spell_1_in_10_days"][early]
+    late_rp = float(np.exp(np.interp(threshold, late_spell, np.log(RP_GRID))))
     return {
         "available": True,
-        "pathway": "ssp585",
-        "windows": {"2025-2035": list(EARLY), "2070-2080": list(LATE)},
-        "measures": values,
+        "release": inventory.series[0].release.id,
+        "scenario": "ssp585",
+        "note": "CRC Open covers SSP5-8.5 only and has no historical baseline.",
+        "windows": {
+            label: [f"{p.start}-{p.end}" for p in group]
+            for label, group in groups.items()
+        },
+        "measures": measures,
         "early_1_in_10_dry_spell_returns_every_n_years_late": round(late_rp, 1),
-        "licence": "CC-BY-NC-4.0",
+        "licence": licence_of(evaluation.report) or "CC-BY-NC-4.0",
         "other_pathways": f"Ask the open-source team: {MORE_DATA}",
     }
 
@@ -241,6 +363,28 @@ def write_atomic(path: Path, text: str) -> None:
     os.replace(handle.name, path)
 
 
+def headline(name: str, crc_open: dict[str, Any]) -> str:
+    if not crc_open["available"]:
+        return f"No CRC Open dry-weather data was found for {name}."
+    early, late = crc_open["windows"]
+    m = crc_open["measures"]
+    rain = m["annual_rain_1_in_10_dry_mm"]
+    spell = m["longest_dry_spell_1_in_10_days"]
+    trend = (
+        "grows"
+        if spell[late] > spell[early]
+        else "shrinks"
+        if spell[late] < spell[early]
+        else "stays"
+    )
+    return (
+        f"At {name}, a 1-in-10 dry year brings about {rain[early]:.0f} mm of rain "
+        f"in {early} and about {rain[late]:.0f} mm in {late} (CRC Open, SSP5-8.5). "
+        f"The 1-in-10-year longest dry spell {trend} from {spell[early]:.0f} to "
+        f"{spell[late]:.0f} days."
+    )
+
+
 def main(argv: list[str] | None = None) -> dict[str, Any]:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -265,42 +409,26 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     args = parser.parse_args(argv)
 
     args.output.mkdir(parents=True, exist_ok=True)
-    cache = args.output / "cache"
-    cache.mkdir(exist_ok=True)
+    runtime = Runtime(cache=Cache.reuse(args.output / "cache"))
 
-    edo_years = tuple(args.edo_years) if args.edo_years else ("all_complete",)
     edo = (
         {"available": False, "reason": "skipped"}
         if args.skip_edo
-        else edo_answer(args.latitude, args.longitude, edo_years, cache)
+        else edo_answer(
+            args.latitude,
+            args.longitude,
+            tuple(args.edo_years) if args.edo_years else None,
+            runtime,
+        )
     )
-    crc_open = crc_open_answer(args.name, args.latitude, args.longitude, cache)
+    crc_open = crc_open_answer(args.name, args.latitude, args.longitude, runtime)
     cdt = (
         {"available": False, "reason": "skipped"}
         if args.skip_cdt
         else cdt_answer(args.latitude, args.longitude)
     )
 
-    if crc_open["available"]:
-        m = crc_open["measures"]
-        spell = m["longest_dry_spell_1_in_10_days"]
-        trend = (
-            "grows"
-            if spell["2070-2080"] > spell["2025-2035"]
-            else "shrinks"
-            if spell["2070-2080"] < spell["2025-2035"]
-            else "changes"
-        )
-        answer = (
-            f"At {args.name}, a 1-in-10 dry year brings about "
-            f"{m['annual_rain_1_in_10_dry_mm']['2025-2035']:.0f} mm of rain in "
-            f"2025-2035 and about {m['annual_rain_1_in_10_dry_mm']['2070-2080']:.0f} mm "
-            f"in 2070-2080 (CRC Open, SSP585). The 1-in-10-year longest dry spell {trend} "
-            f"from {m['longest_dry_spell_1_in_10_days']['2025-2035']:.0f} to "
-            f"{m['longest_dry_spell_1_in_10_days']['2070-2080']:.0f} days."
-        )
-    else:
-        answer = f"No CRC Open dry-weather data was found for {args.name}."
+    answer = headline(args.name, crc_open)
     summary = {
         "question": "Will the farm get drier?",
         "place": {

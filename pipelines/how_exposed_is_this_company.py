@@ -4,10 +4,12 @@ Looks at one company three ways and writes a small, self-describing result:
 
 A. Free public data: the company's locations in an area from Overture Maps
    Places (matched by brand), and how many hurricanes passed within 50 km of
-   each one since 1990 (NOAA IBTrACS, North Atlantic).
+   each one since 1990 (NOAA IBTrACS, US agency best tracks).
 B. CRC Open: expected yearly damage at each location from hurricane wind,
-   heavy rain and hot days, as a share of building value, in 2025-2035 and
-   2070-2080 under SSP5-8.5, using crc-framework's open damage functions.
+   heavy rain and hot days, as a share of building value, in 2023-2036 and
+   2068-2081 under SSP5-8.5, using crc-framework's built-in damage models.
+   CRC Open has no historical baseline, and its hurricane wind curve has no
+   period, so that part is the same in both windows.
 C. CDT (Climate Digital Twin): the company's scores across all of its assets
    for two pathways and three horizons, and its rank within a market index,
    only when ``RISKTHINKING_API_KEY`` is set.
@@ -22,7 +24,8 @@ Run from the repository root:
 Outputs land in ``--output`` (default ``pipeline_output/company``):
 ``summary.json``, ``locations.csv`` and ``locations.geojson`` (one point per
 location, for the crc-viz hazard map). Overture places show where a brand
-operates; they are not evidence of ownership, value or insurance. See
+operates; they are not evidence of ownership, value or insurance. Set
+``CRC_OPEN_CATALOG`` to read another CRC Open release index. See
 ``notebooks/how_exposed_is_this_company.ipynb`` for the explained version.
 """
 
@@ -35,27 +38,49 @@ import os
 import sys
 import tempfile
 import urllib.request
-import warnings
 from datetime import UTC, datetime
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
-from crc_sdk.connectors.duckdb import DuckDBConnection, sql_quote
-from crc_sdk.impacts import impacts
-from crc_sdk.workflows import HazardDataset, IBTrACSPlan, ImpactContextColumns
+import shapely
+from crc_framework import (
+    BuiltinImpact,
+    CellContext,
+    CountryContext,
+    EmptyContext,
+    Impact,
+)
+from crc_sdk import (
+    Assets,
+    Bounds,
+    Cache,
+    CRCOpen,
+    IBTrACS,
+    Period,
+    Runtime,
+    decode_curves,
+)
 
+CRC_OPEN = os.environ.get(
+    "CRC_OPEN_CATALOG", "https://data.riskthinking.ai/crc-open/_CURRENT.json"
+)
 FLORIDA = (-87.7, 24.4, -79.9, 31.1)
 OVERTURE_CATALOG = "https://stac.overturemaps.org/catalog.json"
+# CRC Open variable, label, and the crc-framework damage model applied to it.
+# None of these models can be bound inside a crc-sdk 1.0 evaluation, so the
+# pipeline resolves each one with its context and takes its expectation over
+# the hazard curve itself.
 HAZARDS = {
-    "cyclone": "hurricane wind",
-    "rx1day": "heavy rain",
-    "hot_days": "hot days",
+    "cyclone": ("hurricane wind", BuiltinImpact.CYCLONE),
+    "rx1day": ("heavy rain", BuiltinImpact.MAXIMUM_DAILY_PRECIPITATION),
+    "hot_days": ("hot days", BuiltinImpact.HOT_DAYS),
 }
-EARLY, LATE = (2025, 2030, 2035), (2070, 2075, 2080)
+# CRC Open four-year periods containing these years form each window.
+EARLY_YEARS, LATE_YEARS = (2025, 2030, 2035), (2070, 2075, 2080)
 # Per-location property names on the map. They carry the years but no unit (the
 # map declares the unit, % of building value per year, in crc-viz's fieldInfo),
 # and avoid hazard words such as "cyclone" or "rain": crc-viz reads those as a
@@ -67,8 +92,8 @@ PROPERTY_HAZARDS = {
     "total": "total",
 }
 PROPERTY_WINDOWS = {
-    "early": f"{EARLY[0]}_{EARLY[-1]}",
-    "late": f"{LATE[0]}_{LATE[-1]}",
+    "early": f"{EARLY_YEARS[0]}_{EARLY_YEARS[-1]}",
+    "late": f"{LATE_YEARS[0]}_{LATE_YEARS[-1]}",
 }
 
 
@@ -77,12 +102,9 @@ def damage_property(hazard: str, window: str) -> str:
     return f"{PROPERTY_HAZARDS[hazard]}_damage_{PROPERTY_WINDOWS[window]}"
 
 
-# Midpoints of 200 equal probability slices; the mean over them is the
-# expected (average-year) damage. Values beyond 1-in-400 are left out.
-PROBABILITIES = (np.arange(200) + 0.5) / 200
-RETURN_PERIODS = [float(1 / (1 - p)) for p in PROBABILITIES]
 HURRICANE_KT = 64
 RADIUS_KM = 50
+WIND = "ibtracs:USA:maximum_sustained_wind"
 CDT_PATHWAYS = ("ssp245", "ssp585")
 CDT_HORIZONS = ("2030", "2050", "2090")
 CDT_METRICS = "expected_impact,cvar_95,dcr_score"
@@ -93,6 +115,10 @@ TRIAL = "https://velo.riskthinking.ai/cdt-express"
 def read_json(url: str) -> dict[str, Any]:
     with urllib.request.urlopen(url, timeout=60) as response:
         return json.load(response)
+
+
+def sql_text(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
 
 
 def overture_files(bounds: tuple[float, float, float, float]) -> tuple[str, list[str]]:
@@ -122,34 +148,39 @@ def find_locations(
     bounds: tuple[float, float, float, float],
     region: str | None,
     categories: list[str] | None,
-    cache: Path,
 ) -> dict[str, Any]:
     """Places whose Overture brand name matches ``brand`` inside ``bounds``."""
     release, files = overture_files(bounds)
     if not files:
         return {"available": False, "reason": "no Overture Places files cover the area"}
     conditions = [
-        f"bbox.xmin BETWEEN {bounds[0]} AND {bounds[2]}",
-        f"bbox.ymin BETWEEN {bounds[1]} AND {bounds[3]}",
-        f"lower(brand.names.primary) = lower({sql_quote(brand)})",
+        "bbox.xmin BETWEEN ? AND ?",
+        "bbox.ymin BETWEEN ? AND ?",
+        "lower(brand.names.primary) = lower(?)",
     ]
+    parameters: list[Any] = [bounds[0], bounds[2], bounds[1], bounds[3], brand]
     if region:
-        conditions.append(f"addresses[1].region = {sql_quote(region)}")
-    if categories:
+        # Overture writes regions as "FL" or as ISO 3166-2 codes such as "US-FL".
         conditions.append(
-            "basic_category IN (" + ", ".join(sql_quote(c) for c in categories) + ")"
+            "(addresses[1].region = ? OR addresses[1].region LIKE '%-' || ?)"
         )
-    connection = DuckDBConnection.for_analytics(cache).connect()
-    table = connection.execute(
-        f"""
-        SELECT id AS asset_id, names.primary AS name, basic_category AS category,
-               addresses[1].locality AS city, bbox.xmin AS longitude,
-               bbox.ymin AS latitude
-        FROM read_parquet([{", ".join(sql_quote(f) for f in files)}])
-        WHERE {" AND ".join(conditions)}
-        ORDER BY id
-        """
-    ).to_arrow_table()
+        parameters += [region, region]
+    if categories:
+        conditions.append(f"basic_category IN ({', '.join('?' * len(categories))})")
+        parameters += categories
+    with duckdb.connect() as connection:
+        connection.execute("INSTALL httpfs; LOAD httpfs; SET s3_region = 'us-west-2'")
+        table = connection.execute(
+            f"""
+            SELECT id AS asset_id, names.primary AS name, basic_category AS category,
+                   addresses[1].locality AS city, bbox.xmin AS longitude,
+                   bbox.ymin AS latitude
+            FROM read_parquet([{", ".join(sql_text(f) for f in files)}])
+            WHERE {" AND ".join(conditions)}
+            ORDER BY id
+            """,
+            parameters,
+        ).to_arrow_table()
     if table.num_rows == 0:
         return {"available": False, "reason": f"no Overture places for brand {brand!r}"}
     return {
@@ -171,45 +202,59 @@ def distance_km(lat1: Any, lon1: Any, lat2: Any, lon2: Any) -> np.ndarray:
 
 
 def hurricane_tracks(
-    bounds: tuple[float, float, float, float], since: int, cache: Path
+    bounds: tuple[float, float, float, float], since: int, runtime: Runtime
 ) -> dict[str, Any]:
-    """North Atlantic hurricane-strength track points, densified to ~10 km."""
-    plan = IBTrACSPlan("NA", cache / "ibtracs").years(since, datetime.now(UTC).year)
-    provenance = plan.prefetch()
-    columns = ["SID", "SEASON", "NAME", "ISO_TIME", "LAT", "LON", "USA_WIND"]
-    table = pa.Table.from_batches(list(plan.batches())).select(columns)
-    storms: dict[str, list[tuple[str, float, float, float]]] = {}
-    names: dict[str, str] = {}
+    """Hurricane-strength track segments near bounds, densified to ~10 km."""
     pad = 1.0
-    for row in table.to_pylist():
-        try:
-            lat, lon = float(row["LAT"]), float(row["LON"])
-            wind = float(row["USA_WIND"])
-        except (TypeError, ValueError):
-            continue
-        if not (
-            bounds[0] - pad <= lon <= bounds[2] + pad
-            and bounds[1] - pad <= lat <= bounds[3] + pad
-        ):
-            continue
-        storms.setdefault(row["SID"], []).append((row["ISO_TIME"], lat, lon, wind))
-        names[row["SID"]] = f"{row['NAME'].strip().title()} {row['SEASON']}"
+    observations = (
+        IBTrACS(agency=IBTrACS.Agency.USA)
+        .select(
+            variables=WIND,
+            area=Bounds(
+                west=bounds[0] - pad,
+                south=bounds[1] - pad,
+                east=bounds[2] + pad,
+                north=bounds[3] + pad,
+            ),
+            time=Period.window(since, datetime.now(UTC).year),
+        )
+        .read(runtime=runtime)
+    )
+    table = observations.table
+    points = shapely.from_wkb(table["geometry"].to_numpy(zero_copy_only=False))
+    storms: dict[str, list[tuple[str, float, float, float]]] = {}
+    for sid, time, lat, lon, wind in zip(
+        table["group_id"].to_pylist(),
+        table["time"].to_pylist(),
+        shapely.get_y(points),
+        shapely.get_x(points),
+        table["value"].to_pylist(),
+        strict=True,
+    ):
+        if wind is not None:
+            storms.setdefault(sid, []).append((time, float(lat), float(lon), wind))
     steps = np.linspace(0, 1, 8, endpoint=False)
     ids, lats, lons = [], [], []
-    for sid, points in storms.items():
-        points.sort()
-        for (_, la0, lo0, w0), (_, la1, lo1, w1) in pairwise(points):
+    for sid, track in storms.items():
+        track.sort()
+        for (_, la0, lo0, w0), (_, la1, lo1, w1) in pairwise(track):
             if min(w0, w1) < HURRICANE_KT:
                 continue
             lats += list(la0 + (la1 - la0) * steps)
             lons += list(lo0 + (lo1 - lo0) * steps)
             ids += [sid] * len(steps)
+    resource = observations.report.source_identities[0].resources[0]
     return {
         "ids": np.array(ids),
         "lat": np.array(lats),
         "lon": np.array(lons),
-        "names": names,
-        "provenance": {k: provenance.get(k) for k in ("url", "sha256", "retrieved_at")},
+        "provenance": {
+            "url": resource.uri,
+            "sha256": resource.sha256,
+            "retrieved_at": resource.retrieved_at,
+            "licence": resource.license,
+            "attribution": resource.attribution,
+        },
     }
 
 
@@ -217,10 +262,10 @@ def hurricane_answer(
     locations: pa.Table,
     bounds: tuple[float, float, float, float],
     since: int,
-    cache: Path,
+    runtime: Runtime,
 ) -> dict[str, Any]:
     """Count hurricanes (>= 64 kt) passing within 50 km of each location."""
-    tracks = hurricane_tracks(bounds, since, cache)
+    tracks = hurricane_tracks(bounds, since, runtime)
     lat = np.array(locations.column("latitude").to_pylist())
     lon = np.array(locations.column("longitude").to_pylist())
     counts = []
@@ -252,87 +297,132 @@ def hurricane_answer(
         "share_with_any": round(float(np.mean(counts_array > 0)), 3),
         "median_count": median,
         "median_every_n_years": round(years / median) if median else None,
+        # IBTrACS storm IDs start with the season year.
         "storms_reaching_most_locations": [
-            {"storm": tracks["names"][sid], "locations": n} for sid, n in top
+            {"storm": sid, "season": int(sid[:4]), "locations": n} for sid, n in top
         ],
         "counts": counts,
         "source": tracks["provenance"],
     }
 
 
-def expected_damage(
-    hazard: str,
-    locations: pa.Table,
-    bounds: tuple[float, float, float, float],
-    cache: Path,
-) -> dict[tuple[str, int], float]:
-    """Expected yearly damage ratio per (asset_id, horizon) for one hazard."""
-    plan = (
-        HazardDataset.crc_open()
-        .for_area(bounds)
-        .hazards([hazard])
-        .horizons([*EARLY, *LATE])
-        .cache(cache / "crc-open", mode="reuse")
-    )
-    output = cache / f"{hazard}_damage.parquet"
-    output.unlink(missing_ok=True)
-    request = plan.for_assets(locations).return_periods(RETURN_PERIODS)
-    result = request.impact(
-        impacts.for_factor(hazard),
-        context=ImpactContextColumns(
-            country="country", continent="continent", building_type="building_type"
-        ),
-        name=f"{hazard}_damage_ratio",
-        value_unit="fraction",
-        value_semantics="damage ratio of building value",
-    ).write_parquet(output)
-    columns = list(result.value_columns)
-    table = pq.read_table(output, columns=["asset_id", "horizon", *columns])
-    values = np.column_stack([table.column(c).to_numpy() for c in columns])
-    return {
-        (asset, int(horizon)): float(mean)
-        for asset, horizon, mean in zip(
-            table.column("asset_id").to_pylist(),
-            table.column("horizon").to_pylist(),
-            np.nanmean(values, axis=1),
+def windows(periods: list[Period]) -> dict[str, list[Period]]:
+    """Early and late groups of CRC Open periods, keyed ``early`` and ``late``."""
+    groups = {}
+    for key, years in (("early", EARLY_YEARS), ("late", LATE_YEARS)):
+        groups[key] = sorted(
+            {
+                period.id: period
+                for period in periods
+                if period.start is not None
+                and any(period.start <= year <= period.end for year in years)
+            }.values(),
+            key=lambda period: period.start,
         )
+    return groups
+
+
+def damage_model(hazard: str, cell: int, country: str) -> Impact:
+    """Resolve the hazard's built-in damage model for one H3 cell."""
+    contexts = {
+        "cyclone": CountryContext(country=country),
+        "rx1day": CellContext(cell=cell),
+        "hot_days": EmptyContext(),
     }
+    return Impact.builtin(HAZARDS[hazard][1]).resolve(contexts[hazard])
 
 
 def crc_open_answer(
     locations: pa.Table,
     bounds: tuple[float, float, float, float],
-    cache: Path,
+    runtime: Runtime,
     country: str = "USA",
-    continent: str = "North America",
 ) -> dict[str, Any]:
     """Average expected yearly damage per location over early and late windows."""
-    assets = locations.select(["asset_id", "longitude", "latitude"])
-    n = assets.num_rows
-    assets = assets.append_column("country", pa.array([country] * n))
-    assets = assets.append_column("continent", pa.array([continent] * n))
-    assets = assets.append_column("building_type", pa.array(["commercial"] * n))
-    ids = assets.column("asset_id").to_pylist()
-    per_hazard: dict[str, dict[str, list[float]]] = {}
+    source = CRCOpen(catalog=CRC_OPEN).select(
+        variables=[f"crc:{hazard}" for hazard in HAZARDS],
+        area=Bounds(west=bounds[0], south=bounds[1], east=bounds[2], north=bounds[3]),
+    )
+    assets = Assets(locations.select(["asset_id", "longitude", "latitude"]))
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            for hazard in HAZARDS:
-                damage = expected_damage(hazard, assets, bounds, cache)
-                per_hazard[hazard] = {
-                    window: [
-                        float(
-                            np.mean([damage[(a, h)] for h in years if (a, h) in damage])
-                        )
-                        for a in ids
-                    ]
-                    for window, years in (("early", EARLY), ("late", LATE))
-                }
-    except (ValueError, LookupError) as error:  # e.g. no CRC Open cell here
+        inventory = source.inspect(runtime=runtime)
+        periods = list({s.period.id: s.period for s in inventory.series}.values())
+        groups = windows(periods)
+        timeless = [period for period in periods if period.start is None]
+        # Read the area's curves once; the evaluation only matches each
+        # location to its cell for every hazard and period.
+        curves = source.select(
+            periods=groups["early"] + groups["late"] + timeless
+        ).read(runtime=runtime)
+        matches = (
+            curves.evaluate(assets).probabilities([0.5]).read(runtime=runtime).table
+        )
+    except (ValueError, LookupError) as error:  # e.g. no release index
         return {"available": False, "reason": str(error)}
+    table = curves.table
+    by_support = {
+        key: (curve, cell)
+        for key, curve, cell in zip(
+            zip(
+                table["variable_id"].to_pylist(),
+                table["period_id"].to_pylist(),
+                table["support_id"].to_pylist(),
+                strict=True,
+            ),
+            decode_curves(table),
+            table["cell_id"].to_pylist(),
+            strict=True,
+        )
+        if curve is not None
+    }
+    expected: dict[tuple[str, str, str], float] = {}
+
+    def expected_damage(key: tuple[str, str, str]) -> float:
+        if key not in expected:
+            curve, cell = by_support[key]
+            hazard = key[0].removeprefix("crc:")
+            expected[key] = damage_model(hazard, cell, country).expectation(curve)
+        return expected[key]
+
+    window_of = {p.id: key for key, group in groups.items() for p in group}
+    samples: dict[tuple[str, str, str], list[float]] = {}
+    for row in matches.to_pylist():
+        key = (row["variable_id"], row["period_id"], row["support_id"])
+        if row["support_id"] is None or key not in by_support:
+            continue
+        hazard = row["variable_id"].removeprefix("crc:")
+        # A timeless curve (hurricane wind) counts in both windows.
+        for window in (
+            [window_of[row["period_id"]]]
+            if row["period_id"] in window_of
+            else ["early", "late"]
+        ):
+            samples.setdefault((row["asset_id"], hazard, window), []).append(
+                expected_damage(key)
+            )
+    ids = locations.column("asset_id").to_pylist()
+    per_hazard = {
+        hazard: {
+            window: [
+                float(np.mean(samples[(a, hazard, window)]))
+                if (a, hazard, window) in samples
+                else float("nan")
+                for a in ids
+            ]
+            for window in ("early", "late")
+        }
+        for hazard in HAZARDS
+    }
+    covered = [
+        i
+        for i, a in enumerate(ids)
+        if all((a, h, w) in samples for h in HAZARDS for w in ("early", "late"))
+    ]
+    if not covered:
+        return {"available": False, "reason": "no CRC Open curves at these locations"}
 
     def pct(values: list[float]) -> float:
-        return round(100 * float(np.mean(values)), 2)
+        return round(100 * float(np.mean([values[i] for i in covered])), 2)
 
     total = {
         window: list(np.sum([per_hazard[h][window] for h in HAZARDS], axis=0))
@@ -340,9 +430,24 @@ def crc_open_answer(
     }
     return {
         "available": True,
-        "pathway": "ssp585",
-        "windows": {"early": list(EARLY), "late": list(LATE)},
-        "assumptions": f"commercial building in {country}; equal value per location",
+        "release": inventory.series[0].release.id,
+        "scenario": "ssp585",
+        "note": (
+            "CRC Open covers SSP5-8.5 only and has no historical baseline; its "
+            "hurricane wind curve has no period or scenario."
+        ),
+        "windows": {
+            key: [f"{p.start}-{p.end}" for p in group] for key, group in groups.items()
+        },
+        "damage_models": {
+            hazard: model.value for hazard, (_, model) in HAZARDS.items()
+        },
+        "assumptions": (
+            f"buildings in {country} (hurricane wind); rain damage calibrated per "
+            "H3 cell; equal value per location; expected damage integrates each "
+            "built-in model over the full hazard curve"
+        ),
+        "locations_with_all_hazards": len(covered),
         "average_expected_damage_pct": {
             "total": {w: pct(total[w]) for w in total},
             **{h: {w: pct(per_hazard[h][w]) for w in total} for h in HAZARDS},
@@ -360,6 +465,7 @@ def crc_open_answer(
                 },
             }
             for i, a in enumerate(ids)
+            if i in covered
         },
         "licence": "CC-BY-NC-4.0",
         "other_pathways": f"Ask the open-source team: {MORE_DATA}",
@@ -534,10 +640,12 @@ def headline(brand: str, places: dict, storms: dict, crc: dict, cdt: dict) -> st
         )
     if crc.get("available"):
         total = crc["average_expected_damage_pct"]["total"]
+        early, late = crc["windows"]["early"], crc["windows"]["late"]
         parts.append(
             f"With CRC Open (SSP5-8.5), the average location's expected yearly damage "
             f"from hurricane wind, heavy rain and hot days is {total['early']}% of "
-            f"building value in 2025-2035 and {total['late']}% in 2070-2080."
+            f"building value in {early[0][:4]}-{early[-1][-4:]} and {total['late']}% "
+            f"in {late[0][:4]}-{late[-1][-4:]}."
         )
     if cdt.get("available") and cdt.get("rank"):
         parts.append(
@@ -569,10 +677,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     parser.add_argument(
         "--country",
         default="USA",
-        help="ISO 3166-1 alpha-3 country of the area, for damage functions",
-    )
-    parser.add_argument(
-        "--continent", default="North America", help="Continent of the area"
+        help="ISO 3166-1 alpha-3 country of the area, for the hurricane damage model",
     )
     parser.add_argument("--company", help="Company name in CDT (default: --brand)")
     parser.add_argument("--index", default="Dow Jones Industrial Average")
@@ -592,18 +697,15 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         parser.error("bounds must be min_lon min_lat max_lon max_lat")
 
     args.output.mkdir(parents=True, exist_ok=True)
-    cache = args.output / "cache"
-    cache.mkdir(exist_ok=True)
+    runtime = Runtime(cache=Cache.reuse(args.output / "cache"))
 
-    places = find_locations(args.brand, bounds, args.region, args.category, cache)
+    places = find_locations(args.brand, bounds, args.region, args.category)
     storms: dict[str, Any] = {"available": False, "reason": "skipped"}
     crc: dict[str, Any] = {"available": False, "reason": "no locations"}
     if places["available"]:
         if not args.skip_hurricanes:
-            storms = hurricane_answer(places["table"], bounds, args.since, cache)
-        crc = crc_open_answer(
-            places["table"], bounds, cache, args.country, args.continent
-        )
+            storms = hurricane_answer(places["table"], bounds, args.since, runtime)
+        crc = crc_open_answer(places["table"], bounds, runtime, args.country)
     cdt = (
         {"available": False, "reason": "skipped"}
         if args.skip_cdt

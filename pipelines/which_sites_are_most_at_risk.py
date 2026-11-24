@@ -2,10 +2,11 @@
 
 Screens a list of sites three ways and writes a small, self-describing result:
 
-A. ERA5 (free global reanalysis, 1.5 degree WeatherBench 2 copy): each site's
+A. ERA5 (free global reanalysis, 0.25 degree hourly copy): each site's
    1-in-10-year hottest and wettest day in the recent past.
-B. CRC Open: 1-in-10-year values for four hazards in 2025-2035 and 2070-2080
-   under SSP5-8.5 (each window averaged over three horizons), and their change.
+B. CRC Open: 1-in-10-year values for four hazards in 2023-2036 and 2068-2081
+   under SSP5-8.5 (each averaged over three four-year periods), and their
+   change. CRC Open has no historical baseline.
 C. CDT (Climate Digital Twin): 1-in-10-year hottest day and hot days for a
    historical baseline and three pathways in 2070-2090, only when
    ``RISKTHINKING_API_KEY`` is set.
@@ -13,15 +14,17 @@ C. CDT (Climate Digital Twin): 1-in-10-year hottest day and hot days for a
 Run from the repository root:
 
     uv run python pipelines/which_sites_are_most_at_risk.py --skip-era5
-    uv run python pipelines/which_sites_are_most_at_risk.py --sites my_sites.csv
+    uv run python pipelines/which_sites_are_most_at_risk.py --sites my_sites.csv --skip-era5
 
 ``--sites`` is a CSV with ``site,latitude,longitude`` columns and an optional
 ``city`` (default: ten
 example warehouses in North America). Outputs land in ``--output`` (default
 ``pipeline_output/sites``): ``summary.json``, ``site_hazards.csv`` and
 ``sites.geojson`` (one point per site with its CRC Open values, for the crc-viz
-hazard map; inside the repository the map page is written to ``map/``). ERA5
-takes about 15 seconds per year per hazard; ``--skip-era5`` skips it. See
+hazard map; inside the repository the map page is written to ``map/``). ERA5 is
+slow: its public store keeps one global field per hour, so every year and
+hazard downloads about 16-20 GB however few the sites; ``--skip-era5`` skips
+it. Set ``CRC_OPEN_CATALOG`` to read another CRC Open release index. See
 ``notebooks/which_sites_are_most_at_risk.ipynb`` for the explained version.
 """
 
@@ -33,17 +36,32 @@ import json
 import os
 import sys
 import tempfile
-import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
-from crc_sdk.fitting import fit_distribution
-from crc_sdk.workflows import BlockExtremaPolicy, HazardDataset
+from crc_framework import (
+    DistributionFamily,
+    SampleEstimator,
+    SampleFit,
+    TemperatureUnit,
+)
+from crc_sdk import (
+    ERA5,
+    Assets,
+    Bounds,
+    Cache,
+    CRCOpen,
+    FitFailure,
+    Period,
+    ReadResult,
+    Runtime,
+)
 
+CRC_OPEN = os.environ.get(
+    "CRC_OPEN_CATALOG", "https://data.riskthinking.ai/crc-open/_CURRENT.json"
+)
 EXAMPLE_SITES = [
     ("Phoenix", 33.45, -112.07),
     ("Los Angeles", 34.05, -118.24),
@@ -56,13 +74,24 @@ EXAMPLE_SITES = [
     ("Toronto", 43.65, -79.38),
     ("New York", 40.71, -74.00),
 ]
+TX_MAX = CRCOpen.Variable.ANNUAL_MAXIMUM_DAILY_MAXIMUM_TEMPERATURE.value
 HAZARDS = {
     "tx_max": ("hottest day", "degC"),
     "rx1day": ("wettest day", "mm"),
     "hot_days": ("hot days", "days"),
     "fwi": ("wildfire weather (Fire Weather Index)", "index"),
 }
-EARLY, LATE = (2025, 2030, 2035), (2070, 2075, 2080)
+# CRC Open four-year periods containing these years form each window.
+EARLY_YEARS, LATE_YEARS = (2025, 2030, 2035), (2070, 2075, 2080)
+ERA5_INDICATORS = {
+    "hottest_day_c": ERA5.Indicator.ANNUAL_MAXIMUM_DAILY_MAXIMUM_TEMPERATURE,
+    "wettest_day_mm": ERA5.Indicator.ANNUAL_MAXIMUM_DAILY_PRECIPITATION,
+}
+ERA5_FIT = SampleFit(
+    family=DistributionFamily.GENERALIZED_EXTREME_VALUE,
+    estimator=SampleEstimator.L_MOMENTS,
+    minimum_samples=4,
+)
 CDT_REQUESTS = [("historic", 2010)] + [
     (pathway, horizon)
     for pathway in ("ssp126", "ssp245", "ssp585")
@@ -99,96 +128,133 @@ def read_sites(path: Path | None) -> list[dict[str, Any]]:
     return sites
 
 
-def era5_answer(
-    sites: list[dict[str, Any]], years: tuple[int, int], cache: Path
-) -> dict[str, Any]:
-    """1-in-10-year ERA5 hottest and wettest day at each site's nearest grid point."""
-    lats = [site["latitude"] for site in sites]
-    lons = [site["longitude"] for site in sites]
-    bounds = (min(lons) - 2, min(lats) - 2, max(lons) + 2, max(lats) + 2)
-    values: dict[str, dict[str, float]] = {site["site"]: {} for site in sites}
-    for recipe, label in (("txx", "hottest_day_c"), ("rx1day", "wettest_day_mm")):
-        plan = (
-            HazardDataset.era5(recipe, store="wb2-1p5")
-            .for_area(bounds)
-            .years(*years)
-            .cache(cache / "era5", mode="reuse")
-            .canonicalize(
-                policy=BlockExtremaPolicy.curated(h3_resolution=3, minimum_years=4)
-            )
-        )
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                annual = plan.annual_extremes().to_pylist()
-        except (ValueError, LookupError) as error:
-            return {"available": False, "reason": str(error)}
-        records: dict[tuple[float, float], list[float]] = {}
-        for row in annual:
-            if row["value"] is not None:
-                records.setdefault((row["latitude"], row["longitude"]), []).append(
-                    row["value"]
-                )
-        if not records:
-            return {"available": False, "reason": "no ERA5 values for these sites"}
-        grid = np.array(list(records))
-        for site in sites:
-            index = np.argmin(
-                np.hypot(grid[:, 0] - site["latitude"], grid[:, 1] - site["longitude"])
-            )
-            sample = records[tuple(grid[index])]
-            if len(sample) < 4:
-                continue
-            fitted = fit_distribution(sample, "genextreme", method="lmoments")
-            level = float(np.asarray(fitted.distribution.quantiles([0.9]))[0])
-            values[site["site"]][label] = round(level, 1)
+def site_assets(sites: list[dict[str, Any]]) -> Assets:
+    return Assets(
+        {
+            "asset_id": [site["site"] for site in sites],
+            "longitude": [site["longitude"] for site in sites],
+            "latitude": [site["latitude"] for site in sites],
+        }
+    )
+
+
+def covering(sites: list[dict[str, Any]], pad: float) -> Bounds:
+    return Bounds(
+        west=min(site["longitude"] for site in sites) - pad,
+        south=min(site["latitude"] for site in sites) - pad,
+        east=max(site["longitude"] for site in sites) + pad,
+        north=max(site["latitude"] for site in sites) + pad,
+    )
+
+
+def licence_of(report: Any) -> str | None:
+    for source in report.source_identities:
+        for resource in source.resources:
+            if resource.license:
+                return resource.license
+    return None
+
+
+def one_in_10(annual: ReadResult, assets: Assets, runtime: Runtime) -> dict[str, float]:
+    """1-in-10-year level of fitted annual extremes at each site's grid cell."""
+    rows = (
+        annual.fit(ERA5_FIT, on_failure=FitFailure.SKIP)
+        .evaluate(assets)
+        .return_periods([10])
+        .read(runtime=runtime)
+        .table.to_pylist()
+    )
     return {
-        "available": True,
-        "years": list(years),
-        "grid_spacing_degrees": 1.5,
-        "one_in_10": values,
-        "licence": "CC-BY-4.0 (Copernicus ERA5)",
+        row["asset_id"]: round(row["value"], 1)
+        for row in rows
+        if row["value"] is not None
     }
 
 
-def crc_open_answer(sites: list[dict[str, Any]], cache: Path) -> dict[str, Any]:
-    """CRC Open 1-in-10-year values per site and hazard, early vs late window."""
-    rows: list[dict[str, Any]] = []
-    missing: list[str] = []
-    release = None
-    for site in sites:
-        lat, lon = site["latitude"], site["longitude"]
-        asset = pa.table(
-            {"asset_id": [site["site"]], "longitude": [lon], "latitude": [lat]}
-        )
-        for hazard in HAZARDS:  # asset evaluation takes one hazard at a time
-            plan = (
-                HazardDataset.crc_open()
-                .for_area((lon - 0.05, lat - 0.05, lon + 0.05, lat + 0.05))
-                .hazards([hazard])
-                .horizons(list(EARLY + LATE))
-                .cache(cache / "crc-open", mode="reuse")
+def era5_answer(
+    sites: list[dict[str, Any]], years: tuple[int, int], runtime: Runtime
+) -> dict[str, Any]:
+    """1-in-10-year ERA5 hottest and wettest day at each site's 0.25 degree cell."""
+    assets = site_assets(sites)
+    area = covering(sites, 0.2)
+    values: dict[str, dict[str, float]] = {site["site"]: {} for site in sites}
+    licence = None
+    for label, indicator in ERA5_INDICATORS.items():
+        try:
+            annual = (
+                ERA5(indicator=indicator)
+                .select(area=area, time=Period.window(*years))
+                .read(runtime=runtime)
             )
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    plan.for_assets(asset).return_periods([10]).write_parquet(
-                        cache / "site.parquet"
-                    )
-            except (ValueError, LookupError):  # e.g. outside CRC Open coverage
-                missing.append(f"{site['site']}/{hazard}")
-                continue
-            release = release or plan.resolve().catalog.release
-            rows += pq.read_table(cache / "site.parquet").to_pylist()
-    if not rows:
-        return {"available": False, "reason": "no CRC Open curves for these sites"}
+        except (ValueError, LookupError) as error:
+            return {"available": False, "reason": str(error)}
+        licence = licence or licence_of(annual.report)
+        for site, level in one_in_10(annual, assets, runtime).items():
+            values[site][label] = level
+    return {
+        "available": True,
+        "years": list(years),
+        "grid_spacing_degrees": 0.25,
+        "fit": "GEV (L-moments)",
+        "one_in_10": values,
+        "licence": licence or "CC-BY-4.0",
+    }
+
+
+def windows(periods: list[Period]) -> dict[str, list[Period]]:
+    """Early and late groups of CRC Open periods, keyed ``early`` and ``late``."""
+    groups = {}
+    for key, years in (("early", EARLY_YEARS), ("late", LATE_YEARS)):
+        groups[key] = sorted(
+            {
+                period.id: period
+                for period in periods
+                if period.start is not None
+                and any(period.start <= year <= period.end for year in years)
+            }.values(),
+            key=lambda period: period.start,
+        )
+    return groups
+
+
+def crc_open_answer(sites: list[dict[str, Any]], runtime: Runtime) -> dict[str, Any]:
+    """CRC Open 1-in-10-year values per site and hazard, early vs late window."""
+    source = CRCOpen(catalog=CRC_OPEN).select(
+        variables=[f"crc:{hazard}" for hazard in HAZARDS],
+        area=covering(sites, 0.05),
+    )
+    try:
+        inventory = source.inspect(runtime=runtime)
+        groups = windows(
+            list({s.period.id: s.period for s in inventory.series}.values())
+        )
+        if not (groups["early"] and groups["late"]):
+            return {
+                "available": False,
+                "reason": "CRC Open lacks the early or late periods",
+            }
+        evaluation = (
+            source.select(periods=groups["early"] + groups["late"])
+            .convert_units(variable=TX_MAX, unit=TemperatureUnit.CELSIUS)
+            .evaluate(site_assets(sites))
+            .return_periods([10])
+            .read(runtime=runtime)
+        )
+    except (ValueError, LookupError) as error:  # e.g. no release index
+        return {"available": False, "reason": str(error)}
+    window_of = {p.id: key for key, group in groups.items() for p in group}
     sums: dict[tuple[str, str, str], list[float]] = {}
-    for row in rows:
-        if row["value_rp10"] is None:
+    missing = set()
+    for row in evaluation.table.to_pylist():
+        hazard = row["variable_id"].removeprefix("crc:")
+        if row["value"] is None:
+            missing.add(f"{row['asset_id']}/{hazard}")
             continue
-        window = "early" if row["horizon"] in EARLY else "late"
-        value = row["value_rp10"] - (KELVIN if row["hazard_name"] == "tx_max" else 0)
-        sums.setdefault((row["asset_id"], row["hazard_name"], window), []).append(value)
+        sums.setdefault(
+            (row["asset_id"], hazard, window_of[row["period_id"]]), []
+        ).append(row["value"])
+    if not sums:
+        return {"available": False, "reason": "no CRC Open curves for these sites"}
     table: dict[str, dict[str, dict[str, float]]] = {}
     for (site, hazard, window), values in sums.items():
         table.setdefault(site, {}).setdefault(hazard, {})[window] = float(
@@ -212,13 +278,16 @@ def crc_open_answer(sites: list[dict[str, Any]], cache: Path) -> dict[str, Any]:
             largest[hazard] = {"site": top, "change": changes[top]}
     return {
         "available": True,
-        "release": release,
-        "pathway": "ssp585",
-        "windows": {"early": list(EARLY), "late": list(LATE)},
+        "release": inventory.series[0].release.id,
+        "scenario": "ssp585",
+        "note": "CRC Open covers SSP5-8.5 only and has no historical baseline.",
+        "windows": {
+            key: [f"{p.start}-{p.end}" for p in group] for key, group in groups.items()
+        },
         "one_in_10": table,
         "largest_change": largest,
-        "missing": missing,
-        "licence": "CC-BY-NC-4.0",
+        "missing": sorted(missing),
+        "licence": licence_of(evaluation.report) or "CC-BY-NC-4.0",
         "other_pathways": f"Ask the open-source team: {MORE_DATA}",
     }
 
@@ -345,6 +414,21 @@ def write_atomic(path: Path, text: str) -> None:
     os.replace(handle.name, path)
 
 
+def headline(sites: list[dict[str, Any]], crc_open: dict[str, Any]) -> str:
+    if not crc_open["available"]:
+        return "No CRC Open data was found for these sites."
+    early, late = crc_open["windows"]["early"], crc_open["windows"]["late"]
+    parts = [
+        f"{HAZARDS[hazard][0]}: {top['site']} ({top['change']:+g} {HAZARDS[hazard][1]})"
+        for hazard, top in crc_open["largest_change"].items()
+    ]
+    return (
+        f"Largest change in 1-in-10-year values from {early[0][:4]}-{early[-1][-4:]} "
+        f"to {late[0][:4]}-{late[-1][-4:]} (CRC Open, SSP5-8.5) across "
+        f"{len(sites)} sites. " + "; ".join(parts) + "."
+    )
+
+
 def main(argv: list[str] | None = None) -> dict[str, Any]:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -354,13 +438,13 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         "--era5-years",
         type=int,
         nargs=2,
-        default=(2002, 2021),
+        default=(2005, 2024),
         metavar=("START", "END"),
-        help="ERA5 years (the free 1.5 degree copy ends in 2021)",
+        help="ERA5 years to fit (about 16-20 GB of downloads per year and hazard)",
     )
     parser.add_argument("--output", type=Path, default=Path("pipeline_output/sites"))
     parser.add_argument(
-        "--skip-era5", action="store_true", help="Skip the slower ERA5 baseline"
+        "--skip-era5", action="store_true", help="Skip the slow ERA5 baseline"
     )
     parser.add_argument(
         "--skip-cdt", action="store_true", help="Do not call CDT even when a key is set"
@@ -369,32 +453,21 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
 
     sites = read_sites(args.sites)
     args.output.mkdir(parents=True, exist_ok=True)
-    cache = args.output / "cache"
-    cache.mkdir(exist_ok=True)
+    runtime = Runtime(cache=Cache.reuse(args.output / "cache"))
 
     era5 = (
         {"available": False, "reason": "skipped"}
         if args.skip_era5
-        else era5_answer(sites, tuple(args.era5_years), cache)
+        else era5_answer(sites, tuple(args.era5_years), runtime)
     )
-    crc_open = crc_open_answer(sites, cache)
+    crc_open = crc_open_answer(sites, runtime)
     cdt = (
         {"available": False, "reason": "skipped"}
         if args.skip_cdt
         else cdt_answer(sites)
     )
 
-    if crc_open["available"]:
-        parts = [
-            f"{HAZARDS[hazard][0]}: {top['site']} ({top['change']:+g} {HAZARDS[hazard][1]})"
-            for hazard, top in crc_open["largest_change"].items()
-        ]
-        answer = (
-            f"Largest change in 1-in-10-year values from 2025-2035 to 2070-2080 "
-            f"(CRC Open, SSP585) across {len(sites)} sites. " + "; ".join(parts) + "."
-        )
-    else:
-        answer = "No CRC Open data was found for these sites."
+    answer = headline(sites, crc_open)
     summary = {
         "question": "Which sites face the biggest climate change, and from what?",
         "sites": sites,

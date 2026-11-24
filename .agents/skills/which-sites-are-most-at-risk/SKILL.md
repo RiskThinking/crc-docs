@@ -71,17 +71,17 @@ opensource@riskthinking.ai. Write the sites to `sites.csv` with the header
 `site,latitude,longitude` (add a `city` column if you have one: the map title then reads "site (city)"), install or update the toolkit, then run the script:
 
 ```sh
-python -m pip install --quiet --upgrade "crc-sdk[geometry]"
+python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a2,<2"
 curl -fsSL -o which_sites_are_most_at_risk.py \
   https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/which_sites_are_most_at_risk.py
 python which_sites_are_most_at_risk.py --sites sites.csv --skip-era5 --skip-cdt
 ```
 
 If this skill folder contains `scripts/which_sites_are_most_at_risk.py`, run that
-copy instead of downloading one. It takes a few seconds per site. Read
+copy instead of downloading one. It takes several minutes. Read
 `pipeline_output/sites/summary.json`: `answer` names the site with the largest
 change per hazard, and `b_crc_open.one_in_10` holds every site's 1-in-10-year
-value in 2025–2035 (`early`), 2070–2080 (`late`) and the `change`, for the
+value in 2023–2036 (`early`), 2068–2081 (`late`) and the `change`, for the
 hottest day (°C), wettest day (mm), hot days and wildfire weather (Fire Weather
 Index).
 

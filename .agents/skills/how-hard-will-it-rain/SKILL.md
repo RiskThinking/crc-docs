@@ -52,7 +52,7 @@ high-emissions future (SSP5-8.5); other futures are available from
 opensource@riskthinking.ai. Install or update the toolkit, then run the analysis script:
 
 ```sh
-python -m pip install --quiet --upgrade "crc-sdk[geometry]"
+python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a2,<2"
 curl -fsSL -o how_hard_will_it_rain.py \
   https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_hard_will_it_rain.py
 python how_hard_will_it_rain.py --name "PLACE" --latitude LAT --longitude LON --skip-era5 --skip-cdt
@@ -61,12 +61,13 @@ python how_hard_will_it_rain.py --name "PLACE" --latitude LAT --longitude LON --
 If this skill folder contains `scripts/how_hard_will_it_rain.py`, run that copy
 instead of downloading one. Read `pipeline_output/how_hard_rain/summary.json`:
 its `answer` is the headline and `b_crc_open` holds the values for three windows
-of years (each an average of several horizons).
+of years (each an average of several four-year periods).
 
-`--skip-era5` keeps the run under a minute. Only if the person wants the
-recorded past too, install `"crc-sdk[zarr,netcdf,geometry]"` and drop that flag
-(about 8 minutes); then `a_era5` holds the ERA5 record, which is on a coarse
-grid and understates local downpours.
+`--skip-era5` keeps the run to a few minutes. Only if the person wants the
+recorded past too and the machine can download about 16 GB per year of record,
+install `"crc-sdk[zarr]"` with the same version pin and drop that flag (this
+takes hours); then `a_era5` holds the ERA5 record, on a 0.25 degree grid that
+still understates local downpours.
 
 If a download is blocked, the sandbox probably limits internet access. Say so,
 and suggest allowing `pypi.org`, `raw.githubusercontent.com` and

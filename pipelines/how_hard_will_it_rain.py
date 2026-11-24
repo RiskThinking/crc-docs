@@ -2,22 +2,25 @@
 
 Answers one question three ways and writes a small, self-describing result:
 
-A. ERA5 (free global reanalysis, 1.5 degree WeatherBench 2 copy): each year's
-   wettest day and a fitted curve (the recorded past, on a coarse grid).
-B. CRC Open ``rx1day`` curves for 2025-2090 under SSP5-8.5, averaged over
-   windows of horizons because single horizons are noisy (free, ready-made).
+A. ERA5 (free global reanalysis, 0.25 degree hourly copy): each year's wettest
+   day and a fitted curve (the recorded past, on a reanalysis grid).
+B. CRC Open ``rx1day`` curves for four-year periods from 2023-2026 to
+   2088-2091 under SSP5-8.5, averaged over groups of periods because single
+   periods are noisy (free, ready-made; CRC Open has no historical baseline).
 C. CDT (Climate Digital Twin) return levels for a historical baseline and
    three pathways in 2070-2090, only when ``RISKTHINKING_API_KEY`` is set.
 
 Run from the repository root:
 
-    uv run python pipelines/how_hard_will_it_rain.py
+    uv run python pipelines/how_hard_will_it_rain.py --skip-era5
     uv run python pipelines/how_hard_will_it_rain.py --name Chicago --latitude 41.88 --longitude -87.63 --skip-era5
 
 Outputs land in ``--output`` (default ``pipeline_output/how_hard_rain``):
 ``summary.json`` (plain-language answer plus provenance) and ``return_levels.csv``.
-Rain is millimetres on the wettest day of the year. ERA5 takes about 15 seconds
-per year; ``--skip-era5`` gives a quick answer from CRC Open (and CDT) alone.
+Rain is millimetres on the wettest day of the year. ERA5 is slow: its public
+store keeps one global field per hour, so every year downloads about 16 GB
+even for one place. ``--skip-era5`` gives a quick answer from CRC Open (and
+CDT) alone. Set ``CRC_OPEN_CATALOG`` to read another CRC Open release index.
 See ``notebooks/how_hard_will_it_rain.ipynb`` for the explained version.
 """
 
@@ -27,27 +30,34 @@ import argparse
 import json
 import os
 import tempfile
-import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
-from crc_sdk.workflows import (
-    BlockExtremaPolicy,
-    HazardDataset,
-    curve_parameters_from_row,
+import shapely
+from crc_framework import DistributionFamily, SampleEstimator, SampleFit
+from crc_sdk import (
+    ERA5,
+    Assets,
+    Bounds,
+    Cache,
+    CRCOpen,
+    FitFailure,
+    Period,
+    ReadResult,
+    Runtime,
 )
-from shapely import wkb
-from shapely.geometry import Point
 
+CRC_OPEN = os.environ.get(
+    "CRC_OPEN_CATALOG", "https://data.riskthinking.ai/crc-open/_CURRENT.json"
+)
 RETURN_PERIODS = (2, 5, 10, 25)
+# Groups of CRC Open four-year periods, by the years they span.
 WINDOWS = {
-    "2025-2045": (2025, 2030, 2035, 2040, 2045),
-    "2050-2065": (2050, 2055, 2060, 2065),
-    "2070-2090": (2070, 2075, 2080, 2085, 2090),
+    "2023-2046": (2023, 2046),
+    "2048-2066": (2048, 2066),
+    "2068-2091": (2068, 2091),
 }
 CDT_PATHWAYS = ("ssp126", "ssp245", "ssp585")
 CDT_LATE_HORIZONS = (2070, 2080, 2090)
@@ -56,138 +66,171 @@ TRIAL = "https://velo.riskthinking.ai/cdt-express"
 RP_GRID = np.geomspace(1.2, 100, 200)
 
 
-def quantiles(distribution: Any, return_periods: Any) -> np.ndarray:
-    probabilities = (1 - 1 / np.asarray(return_periods, dtype=float)).tolist()
-    return np.asarray(distribution.quantiles(probabilities), dtype=float)
-
-
 def levels_dict(levels: Any) -> dict[int, float]:
-    return dict(zip(RETURN_PERIODS, np.round(levels, 1).tolist()))
+    return dict(zip(RETURN_PERIODS, np.round(levels, 1).tolist(), strict=True))
+
+
+def licence_of(report: Any) -> str | None:
+    for source in report.source_identities:
+        for resource in source.resources:
+            if resource.license:
+                return resource.license
+    return None
+
+
+def place_assets(name: str, latitude: float, longitude: float) -> Assets:
+    return Assets(
+        {"asset_id": [name], "longitude": [longitude], "latitude": [latitude]}
+    )
+
+
+def annual_fit(years: int) -> SampleFit:
+    """GEV by L-moments with a Gumbel fallback, needing most of the years."""
+    minimum = min(20, years)
+    return SampleFit(
+        family=DistributionFamily.GENERALIZED_EXTREME_VALUE,
+        estimator=SampleEstimator.L_MOMENTS,
+        minimum_samples=minimum,
+        fallbacks=(
+            SampleFit(family=DistributionFamily.GUMBEL_RIGHT, minimum_samples=minimum),
+        ),
+    )
+
+
+def era5_summary(
+    annual: ReadResult,
+    place: Assets,
+    years: tuple[int, int],
+    runtime: Runtime,
+) -> dict[str, Any]:
+    """Fit annual wettest days and read them at the grid cell holding the place."""
+    fitted = annual.fit(annual_fit(years[1] - years[0] + 1), on_failure=FitFailure.SKIP)
+    rows = (
+        fitted.evaluate(place)
+        .return_periods(RETURN_PERIODS)
+        .read(runtime=runtime)
+        .table.to_pylist()
+    )
+    matched = [row for row in rows if row["value"] is not None]
+    if not matched:
+        return {"available": False, "reason": "no ERA5 curve could be fitted here"}
+    support = matched[0]["support_id"]
+    samples = [
+        row
+        for row in annual.table.to_pylist()
+        if row["support_id"] == support and row["value"] is not None
+    ]
+    wettest = max(samples, key=lambda row: row["value"])
+    cell = shapely.from_wkb(samples[0]["geometry"]).centroid
+    return {
+        "available": True,
+        "grid_point": [round(cell.y, 3), round(cell.x, 3)],
+        "grid_spacing_degrees": 0.25,
+        "years": list(years),
+        "complete_years": len(samples),
+        "wettest_day_mm": round(float(wettest["value"]), 1),
+        "wettest_year": int(wettest["time"]),
+        "fit": "GEV (L-moments), Gumbel fallback",
+        "return_levels_mm": levels_dict([row["value"] for row in matched]),
+        "licence": licence_of(annual.report) or "CC-BY-4.0",
+    }
 
 
 def era5_answer(
-    latitude: float, longitude: float, years: tuple[int, int], cache: Path
+    name: str,
+    latitude: float,
+    longitude: float,
+    years: tuple[int, int],
+    runtime: Runtime,
 ) -> dict[str, Any]:
-    """Fit ERA5 annual wettest days at the grid point nearest the place."""
-    plan = (
-        HazardDataset.era5("rx1day", store="wb2-1p5")
-        .for_area((longitude - 0.1, latitude - 0.1, longitude + 0.1, latitude + 0.1))
-        .years(*years)
-        .cache(cache / "era5", mode="reuse")
-        .canonicalize(
-            policy=BlockExtremaPolicy.curated(
-                h3_resolution=5, minimum_years=min(20, years[1] - years[0] + 1)
-            )
-        )
+    """ERA5 annual wettest days at the 0.25 degree cell holding the place."""
+    samples = ERA5(indicator=ERA5.Indicator.ANNUAL_MAXIMUM_DAILY_PRECIPITATION).select(
+        area=Bounds(
+            west=longitude - 0.1,
+            south=latitude - 0.1,
+            east=longitude + 0.1,
+            north=latitude + 0.1,
+        ),
+        time=Period.window(*years),
     )
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            annual = plan.annual_extremes().to_pylist()
-            plan.materialize(cache / "era5_rx1day.parquet")
+        annual = samples.read(runtime=runtime)
     except (ValueError, LookupError) as error:
         return {"available": False, "reason": str(error)}
-    rows = [
-        row
-        for row in pq.read_table(cache / "era5_rx1day.parquet").to_pylist()
-        if row["curve_kind"] != "no_data"
-    ]
-    annual = [row for row in annual if row["value"] is not None]
-    if not rows or not annual:
-        return {"available": False, "reason": "no ERA5 curve could be fitted here"}
-    # The search box can touch two grid cells: use the one containing (or nearest
-    # to) the place for both the curve and the yearly values.
-    place = Point(longitude, latitude)
-    row = min(rows, key=lambda row: wkb.loads(row["source_geometry"]).distance(place))
-    cell = wkb.loads(row["source_geometry"])
-    point = [
-        sample
-        for sample in annual
-        if cell.covers(Point(sample["longitude"], sample["latitude"]))
-    ]
-    if not point:
-        return {"available": False, "reason": "no ERA5 yearly values in the grid cell"}
-    wettest = max(point, key=lambda sample: sample["value"])
-    curve = curve_parameters_from_row(row).to_distribution()
-    return {
-        "available": True,
-        "grid_point": [point[0]["latitude"], point[0]["longitude"]],
-        "grid_spacing_degrees": 1.5,
-        "years": list(years),
-        "wettest_day_mm": round(float(wettest["value"]), 1),
-        "wettest_year": int(wettest["year"]),
-        "return_levels_mm": levels_dict(quantiles(curve, RETURN_PERIODS)),
-        "licence": "CC-BY-4.0 (Copernicus ERA5)",
-    }
+    return era5_summary(annual, place_assets(name, latitude, longitude), years, runtime)
 
 
 def crc_open_answer(
-    name: str, latitude: float, longitude: float, cache: Path
+    name: str, latitude: float, longitude: float, runtime: Runtime
 ) -> dict[str, Any]:
-    """Average CRC Open rx1day curves over windows of horizons at the place's cell."""
-    horizons = [horizon for window in WINDOWS.values() for horizon in window]
-    plan = (
-        HazardDataset.crc_open()
-        .for_area(
-            (longitude - 0.05, latitude - 0.05, longitude + 0.05, latitude + 0.05)
-        )
-        .hazards(["rx1day"])
-        .horizons(horizons)
-        .cache(cache / "crc-open", mode="reuse")
-    )
-    place = pa.table(
-        {"asset_id": [name], "longitude": [longitude], "latitude": [latitude]}
+    """Average CRC Open rx1day return levels over groups of periods at the place."""
+    source = CRCOpen(catalog=CRC_OPEN).select(
+        variables=CRCOpen.Variable.ANNUAL_MAXIMUM_DAILY_PRECIPITATION,
+        area=Bounds(
+            west=longitude - 0.01,
+            south=latitude - 0.01,
+            east=longitude + 0.01,
+            north=latitude + 0.01,
+        ),
     )
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            plan.for_assets(place).return_periods([2]).write_parquet(
-                cache / "place.parquet"
-            )
-            plan.materialize(cache / "rx1day.parquet")
-    except (ValueError, LookupError) as error:  # e.g. no CRC Open cell here
+        inventory = source.inspect(runtime=runtime)
+        evaluation = (
+            source.evaluate(place_assets(name, latitude, longitude))
+            .return_periods(RP_GRID.tolist())
+            .read(runtime=runtime)
+        )
+    except (ValueError, LookupError) as error:  # e.g. no release index or cell here
         return {"available": False, "reason": str(error)}
-    cells = pq.read_table(cache / "place.parquet").column("cell_index").to_pylist()
-    rows = [
-        row
-        for row in pq.read_table(cache / "rx1day.parquet").to_pylist()
-        if cells and row["cell_index"] == cells[0] and row["curve_kind"] != "no_data"
-    ]
-    if not rows:
+    periods = {series.period.id: series.period for series in inventory.series}
+    curves: dict[str, list[float]] = {}
+    support = None
+    for row in evaluation.table.to_pylist():
+        if row["value"] is not None:
+            curves.setdefault(row["period_id"], []).append(row["value"])
+            support = row["support_id"]
+    if not curves:
         return {"available": False, "reason": "no CRC Open rx1day curve at this place"}
-    curves = {
-        row["horizon"]: curve_parameters_from_row(row).to_distribution() for row in rows
+    grouped: dict[str, list[str]] = {
+        label: [
+            period_id
+            for period_id, period in sorted(periods.items(), key=lambda p: p[1].start)
+            if period_id in curves and first <= period.start and period.end <= last
+        ]
+        for label, (first, last) in WINDOWS.items()
     }
     windows = {
-        name: np.mean(
-            [quantiles(curves[h], RP_GRID) for h in years if h in curves], axis=0
-        )
-        for name, years in WINDOWS.items()
-        if any(h in curves for h in years)
+        label: np.mean([curves[period_id] for period_id in ids], axis=0)
+        for label, ids in grouped.items()
+        if ids
     }
     first, last = next(iter(windows)), list(windows)[-1]
     threshold = float(np.interp(10, RP_GRID, windows[first]))
-    metadata = json.loads(
-        pq.read_schema(cache / "rx1day.parquet").metadata[b"crc.hazard.metadata"]
-    )
     return {
         "available": True,
-        "release": plan.resolve().catalog.release,
-        "pathway": rows[0]["pathway"],
-        "cell_index": str(cells[0]),
-        "windows": {name: list(WINDOWS[name]) for name in windows},
+        "release": inventory.series[0].release.id,
+        "scenario": "ssp585",
+        "note": "CRC Open covers SSP5-8.5 only and has no historical baseline.",
+        "support_id": support,
+        "windows": {
+            label: [f"{periods[i].start}-{periods[i].end}" for i in ids]
+            for label, ids in grouped.items()
+            if ids
+        },
         "return_levels_mm": {
-            name: levels_dict(np.interp(RETURN_PERIODS, RP_GRID, levels))
-            for name, levels in windows.items()
+            label: levels_dict(np.interp(RETURN_PERIODS, RP_GRID, levels))
+            for label, levels in windows.items()
         },
         "baseline_window": first,
         "baseline_1_in_10_mm": round(threshold, 1),
         "late_1_in_10_mm": round(float(np.interp(10, RP_GRID, windows[last])), 1),
         "baseline_1_in_10_becomes_every_n_years": {
-            name: round(float(np.exp(np.interp(threshold, levels, np.log(RP_GRID)))), 1)
-            for name, levels in windows.items()
+            label: round(
+                float(np.exp(np.interp(threshold, levels, np.log(RP_GRID)))), 1
+            )
+            for label, levels in windows.items()
         },
-        "licence": metadata.get("licence") or "CC-BY-NC-4.0",
+        "licence": licence_of(evaluation.report) or "CC-BY-NC-4.0",
         "other_pathways": f"Ask the open-source team: {MORE_DATA}",
     }
 
@@ -249,6 +292,28 @@ def write_atomic(path: Path, text: str) -> None:
     os.replace(handle.name, path)
 
 
+def headline(name: str, era5: dict[str, Any], crc_open: dict[str, Any]) -> str:
+    if crc_open["available"]:
+        first = crc_open["baseline_window"]
+        shift = crc_open["baseline_1_in_10_becomes_every_n_years"]
+        last = list(shift)[-1]
+        return (
+            f"In {name}, a 1-in-10-year wettest day brings about "
+            f"{crc_open['baseline_1_in_10_mm']:.0f} mm of rain in {first} "
+            f"(CRC Open, SSP5-8.5). By {last} the 1-in-10-year "
+            f"day brings about {crc_open['late_1_in_10_mm']:.0f} mm, and "
+            f"{crc_open['baseline_1_in_10_mm']:.0f} mm falls about every "
+            f"{shift[last]:g} years."
+        )
+    if era5["available"]:
+        return (
+            f"CRC Open has no curve for {name}. In ERA5 "
+            f"({era5['years'][0]}-{era5['years'][1]}), a 1-in-10-year wettest day "
+            f"brought about {era5['return_levels_mm'][10]:.0f} mm."
+        )
+    return f"No heavy-rain data was found for {name}."
+
+
 def main(argv: list[str] | None = None) -> dict[str, Any]:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -260,15 +325,15 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         "--era5-years",
         type=int,
         nargs=2,
-        default=(1992, 2021),
+        default=(1995, 2024),
         metavar=("START", "END"),
-        help="ERA5 years (the free 1.5 degree copy ends in 2021)",
+        help="ERA5 years to fit (about 16 GB of downloads per year)",
     )
     parser.add_argument(
         "--output", type=Path, default=Path("pipeline_output/how_hard_rain")
     )
     parser.add_argument(
-        "--skip-era5", action="store_true", help="Skip the slower ERA5 baseline"
+        "--skip-era5", action="store_true", help="Skip the slow ERA5 baseline"
     )
     parser.add_argument(
         "--skip-cdt", action="store_true", help="Do not call CDT even when a key is set"
@@ -276,41 +341,23 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     args = parser.parse_args(argv)
 
     args.output.mkdir(parents=True, exist_ok=True)
-    cache = args.output / "cache"
-    cache.mkdir(exist_ok=True)
+    runtime = Runtime(cache=Cache.reuse(args.output / "cache"))
 
     era5 = (
         {"available": False, "reason": "skipped"}
         if args.skip_era5
-        else era5_answer(args.latitude, args.longitude, tuple(args.era5_years), cache)
+        else era5_answer(
+            args.name, args.latitude, args.longitude, tuple(args.era5_years), runtime
+        )
     )
-    crc_open = crc_open_answer(args.name, args.latitude, args.longitude, cache)
+    crc_open = crc_open_answer(args.name, args.latitude, args.longitude, runtime)
     cdt = (
         {"available": False, "reason": "skipped"}
         if args.skip_cdt
         else cdt_answer(args.latitude, args.longitude)
     )
 
-    if crc_open["available"]:
-        first = crc_open["baseline_window"]
-        shift = crc_open["baseline_1_in_10_becomes_every_n_years"]
-        last = list(shift)[-1]
-        answer = (
-            f"In {args.name}, a 1-in-10-year wettest day brings about "
-            f"{crc_open['baseline_1_in_10_mm']:.0f} mm of rain in {first} "
-            f"(CRC Open, {crc_open['pathway'].upper()}). By {last} the 1-in-10-year "
-            f"day brings about {crc_open['late_1_in_10_mm']:.0f} mm, and "
-            f"{crc_open['baseline_1_in_10_mm']:.0f} mm falls about every "
-            f"{shift[last]:g} years."
-        )
-    elif era5["available"]:
-        answer = (
-            f"CRC Open has no curve for {args.name}. In ERA5 "
-            f"({era5['years'][0]}-{era5['years'][1]}), a 1-in-10-year wettest day "
-            f"brought about {era5['return_levels_mm'][10]:.0f} mm."
-        )
-    else:
-        answer = f"No heavy-rain data was found for {args.name}."
+    answer = headline(args.name, era5, crc_open)
     summary = {
         "question": "How much rain can fall in one day, and is that getting worse?",
         "place": {
@@ -336,10 +383,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
             f"era5,{label},{rp},{v}" for rp, v in era5["return_levels_mm"].items()
         ]
     for window, levels in crc_open.get("return_levels_mm", {}).items():
-        lines += [
-            f"crc_open,{crc_open['pathway']} {window},{rp},{v}"
-            for rp, v in levels.items()
-        ]
+        lines += [f"crc_open,ssp585 {window},{rp},{v}" for rp, v in levels.items()]
     if cdt["available"]:
         for label, levels in cdt["return_levels_mm"].items():
             lines += [f"cdt,{label},{rp},{v}" for rp, v in levels.items()]
