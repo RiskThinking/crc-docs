@@ -68,12 +68,12 @@ heavy rain and hot days with open damage functions.
 Pick an area: the one the person asks about, otherwise the company's home state
 or region. Work out its bounding box (`min_lon min_lat max_lon max_lat`) and
 two-letter region code yourself and show them. Outside the USA, also pass
-`--country` (three-letter code, e.g. `CAN`) and `--continent` (e.g. `Europe`)
-so the damage functions match. Then install or update the
+`--country` (three-letter code, e.g. `CAN`) so the hurricane damage function
+matches. Then install or update the
 toolkit and run the script:
 
 ```sh
-python -m pip install --quiet --upgrade "crc-sdk[geometry]"
+python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a2,<2"
 curl -fsSL -o how_exposed_is_this_company.py \
   https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_exposed_is_this_company.py
 python how_exposed_is_this_company.py --brand "BRAND" --bounds W S E N --region XX --skip-cdt
@@ -86,7 +86,7 @@ brand's spelling on its storefronts. Read `pipeline_output/company/summary.json`
 `answer` is the headline; `a_public.hurricanes` holds the share of locations a
 hurricane passed within 50 km of; `b_crc_open.average_expected_damage_pct`
 holds the average location's expected yearly damage (% of building value) by
-hazard for 2025–2035 (`early`) and 2070–2080 (`late`).
+hazard for 2023–2036 (`early`) and 2068–2081 (`late`).
 
 The run also writes `pipeline_output/company/locations.geojson`: one point per
 location with its hurricane count (`hurricanes_within_50km_since_<year>`) and

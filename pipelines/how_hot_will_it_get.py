@@ -2,9 +2,10 @@
 
 Answers one question three ways and writes a small, self-describing result:
 
-A. The nearest NOAA GHCNh weather station: each year's hottest reading and a
+A. The nearest NOAA GHCNh weather station: each year's hottest day and a
    fitted curve (the measured past).
-B. CRC Open ``tx_max`` curves for 2025-2100 under SSP5-8.5 (free, ready-made).
+B. CRC Open ``tx_max`` curves for four-year periods from 2023-2026 onwards
+   under SSP5-8.5 (free, ready-made; CRC Open has no historical baseline).
 C. CDT (Climate Digital Twin) exposure metrics for several pathways, only when
    ``RISKTHINKING_API_KEY`` is set (enterprise; optional).
 
@@ -15,8 +16,9 @@ Run from the repository root:
 
 Outputs land in ``--output`` (default ``pipeline_output/how_hot``):
 ``summary.json`` (plain-language answer plus provenance) and ``return_levels.csv``.
-Temperatures are degrees Celsius. Station values are sampled hourly maxima;
-CRC Open and CDT values describe an H3 cell, not a point. See
+Temperatures are degrees Celsius. Station values are annual maxima of complete
+days (24 hourly reports); CRC Open and CDT values describe an H3 cell, not a
+point. Set ``CRC_OPEN_CATALOG`` to read another CRC Open release index. See
 ``notebooks/how_hot_will_it_get.ipynb`` for the explained, illustrated version.
 """
 
@@ -24,24 +26,37 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import tempfile
-import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
-from crc_sdk.workflows import (
-    BlockExtremaPolicy,
-    HazardDataset,
-    curve_parameters_from_row,
+from crc_framework import (
+    DistributionFamily,
+    SampleEstimator,
+    SampleFit,
+    TemperatureUnit,
+)
+from crc_sdk import (
+    Assets,
+    Bounds,
+    Cache,
+    Coverage,
+    CRCOpen,
+    GHCNh,
+    Period,
+    Runtime,
+    decode_curves,
 )
 
+CRC_OPEN = os.environ.get(
+    "CRC_OPEN_CATALOG", "https://data.riskthinking.ai/crc-open/_CURRENT.json"
+)
 RETURN_PERIODS = (2, 5, 10, 20, 50, 100)
-HORIZONS = (2025, 2050, 2080)
+YEARS = (2025, 2050, 2080)
 CDT_PATHWAYS = (
     ("historic", 2010),
     ("ssp126", 2050),
@@ -51,161 +66,233 @@ CDT_PATHWAYS = (
 MORE_DATA = "mailto:opensource@riskthinking.ai"
 TRIAL = "https://velo.riskthinking.ai/cdt-express"
 KELVIN = 273.15
+STATION_SEARCH_DEGREES = 0.25
+MINIMUM_YEARS = 15
+# Generalized extreme value by L-moments, Gumbel when that fails.
+ANNUAL_MAXIMUM_FIT = SampleFit(
+    family=DistributionFamily.GENERALIZED_EXTREME_VALUE,
+    estimator=SampleEstimator.L_MOMENTS,
+    minimum_samples=MINIMUM_YEARS,
+    fallbacks=(
+        SampleFit(
+            family=DistributionFamily.GUMBEL_RIGHT, minimum_samples=MINIMUM_YEARS
+        ),
+    ),
+)
 
 
-def quantiles(
-    distribution: Any, return_periods: tuple[int, ...] | list[float]
-) -> np.ndarray:
-    probabilities = (1 - 1 / np.asarray(return_periods, dtype=float)).tolist()
-    return np.asarray(distribution.quantiles(probabilities), dtype=float)
+def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    lat1, lon1, lat2, lon2 = map(math.radians, (lat1, lon1, lat2, lon2))
+    h = (
+        math.sin((lat2 - lat1) / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
+    )
+    return 2 * 6371 * math.asin(math.sqrt(h))
 
 
-def return_period_of(distribution: Any, value: float) -> float:
-    non_exceedance = float(np.asarray(distribution.cdf([value]))[0])
-    return float("inf") if non_exceedance >= 1 else 1 / (1 - non_exceedance)
+def non_exceedance(return_periods: Any) -> list[float]:
+    return (1 - 1 / np.asarray(return_periods, dtype=float)).tolist()
+
+
+def return_period_of(curve: Any, value: float) -> float:
+    """Return period (years) of ``value`` on an upper-tail annual curve."""
+    if hasattr(curve, "cdf"):
+        probability = float(curve.cdf(value))
+    else:  # a quantile curve: interpolate within its supplied knots
+        probability = float(np.interp(value, curve.values, curve.probabilities))
+    return math.inf if probability >= 1 else 1 / (1 - probability)
+
+
+def licence_of(report: Any) -> str | None:
+    for source in report.source_identities:
+        for resource in source.resources:
+            if resource.license:
+                return resource.license
+    return None
 
 
 def station_answer(
-    latitude: float, longitude: float, years: tuple[int, int], cache: Path
+    latitude: float, longitude: float, years: tuple[int, int], runtime: Runtime
 ) -> dict[str, Any]:
-    """Fit the nearest GHCNh station's annual hottest readings."""
-    search = 0.25
-    bounds = (
-        longitude - search,
-        latitude - search,
-        longitude + search,
-        latitude + search,
+    """Fit the nearest GHCNh station's annual hottest days."""
+    period = Period.window(*years)
+    source = GHCNh(
+        indicator=GHCNh.Indicator.ANNUAL_MAXIMUM_DAILY_MAXIMUM_TEMPERATURE,
+        coverage=Coverage.minimum_fraction(0.9),  # 90% of the year's days
     )
-    try:
-        catalogue = (
-            HazardDataset.ghcnh("temperature_max")
-            .for_area(bounds)
-            .years(*years)
-            .cache(cache / "ghcnh", mode="reuse")
-            .stations()
-            .to_pylist()
-        )
-    except ValueError:  # no station matches the area and years
-        catalogue = []
-    if not catalogue:
+    search = STATION_SEARCH_DEGREES
+    area = Bounds(
+        west=longitude - search,
+        south=latitude - search,
+        east=longitude + search,
+        north=latitude + search,
+    )
+    stations = [
+        station
+        for station in source.select(area=area, time=period)
+        .inspect(runtime=runtime)
+        .stations
+        if station.latitude is not None and station.longitude is not None
+    ]
+    if not stations:
         return {"available": False, "reason": "no GHCNh station within about 25 km"}
-    scale = np.cos(np.radians(latitude))
-    for record in catalogue:
-        record["distance_km"] = float(
-            111
-            * np.hypot(
-                record["latitude"] - latitude, (record["longitude"] - longitude) * scale
-            )
-        )
+    stations.sort(
+        key=lambda s: distance_km(latitude, longitude, s.latitude, s.longitude)
+    )
     last_error = "no station could be fitted"
-    for station in sorted(catalogue, key=lambda record: record["distance_km"])[:3]:
-        plan = (
-            HazardDataset.ghcnh("temperature_max")
-            .for_stations([station["station"]])
-            .years(*years)
-            .quality(minimum_hour_fraction=0.75, minimum_day_fraction=0.9)
-            .cache(cache / "ghcnh", mode="reuse")
-            .canonicalize(policy=BlockExtremaPolicy.curated(minimum_years=15))
+    for station in stations[:3]:
+        annual = source.select(stations=station, time=period).read(runtime=runtime)
+        rows = [row for row in annual.table.to_pylist() if row["value"] is not None]
+        # A station that moved has one support per location; fit the longest.
+        by_support: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            by_support.setdefault(row["support_id"], []).append(row)
+        if not by_support:
+            last_error = f"{station.id}: no complete years"
+            continue
+        support, complete = max(by_support.items(), key=lambda item: len(item[1]))
+        if len(complete) < MINIMUM_YEARS:
+            last_error = (
+                f"{station.id}: {len(complete)} complete years, {MINIMUM_YEARS} needed"
+            )
+            continue
+        fitted = annual.fit(ANNUAL_MAXIMUM_FIT).read(runtime=runtime).table
+        curve = next(
+            curve
+            for curve, support_id in zip(
+                decode_curves(fitted), fitted["support_id"].to_pylist(), strict=True
+            )
+            if support_id == support
         )
-        try:
-            curve_path = cache / f"station-{station['station']}.parquet"
-            plan.materialize(curve_path)
-            plan.write_annual_extremes(cache / f"annual-{station['station']}.parquet")
-        except (ValueError, LookupError) as error:  # too few complete years
-            last_error = str(error)
-            continue
-        curve_rows = pq.read_table(curve_path).to_pylist()
-        if not curve_rows or curve_rows[0]["curve_kind"] == "no_data":
-            last_error = f"{station['station']}: too few complete years to fit"
-            continue
-        annual = pq.read_table(
-            cache / f"annual-{station['station']}.parquet"
-        ).to_pylist()
-        complete = [
-            row for row in annual if row["complete"] and row["value"] is not None
-        ]
-        distribution = curve_parameters_from_row(curve_rows[0]).to_distribution()
+        hottest = max(complete, key=lambda row: row["value"])
         return {
             "available": True,
-            "station_id": station["station"],
-            "station_name": station["name"],
-            "distance_km": round(station["distance_km"], 1),
+            "station_id": station.id,
+            "station_name": station.label,
+            "distance_km": round(
+                distance_km(latitude, longitude, station.latitude, station.longitude),
+                1,
+            ),
+            "years": list(years),
             "complete_years": len(complete),
-            "hottest_reading_c": max(row["value"] for row in complete),
+            "hottest_reading_c": hottest["value"],
+            "hottest_year": int(hottest["time"]),
+            "fit": "GEV (L-moments), Gumbel fallback",
             "return_levels_c": dict(
                 zip(
                     RETURN_PERIODS,
-                    quantiles(distribution, RETURN_PERIODS).round(2).tolist(),
+                    np.round(curve.quantile(non_exceedance(RETURN_PERIODS)), 2)
+                    .astype(float)
+                    .tolist(),
+                    strict=True,
                 )
             ),
-            "licence": "CC0-1.0 (NOAA GHCNh)",
+            "missing_years": annual.report.counts.incomplete_years,
+            "licence": licence_of(annual.report) or "CC0-1.0",
         }
     return {"available": False, "reason": last_error}
 
 
+def window_label(period: Period) -> str:
+    return f"{period.start}-{period.end}"
+
+
+def windows_containing(periods: list[Period], years: tuple[int, ...]) -> list[Period]:
+    """The release periods containing each year, in time order, without repeats."""
+    chosen: dict[str, Period] = {}
+    for year in years:
+        for period in periods:
+            if period.start is not None and period.start <= year <= period.end:
+                chosen[period.id] = period
+                break
+    return sorted(chosen.values(), key=lambda period: period.start)
+
+
 def crc_open_answer(
-    name: str, latitude: float, longitude: float, horizons: tuple[int, ...], cache: Path
+    name: str,
+    latitude: float,
+    longitude: float,
+    years: tuple[int, ...],
+    runtime: Runtime,
 ) -> dict[str, Any]:
     """Read CRC Open tx_max curves at the place's H3 cell."""
-    plan = (
-        HazardDataset.crc_open()
-        .for_area(
-            (longitude - 0.05, latitude - 0.05, longitude + 0.05, latitude + 0.05)
-        )
-        .hazards(["tx_max"])
-        .horizons(list(horizons))
-        .cache(cache / "crc-open", mode="reuse")
-    )
-    place = pa.table(
-        {"asset_id": [name], "longitude": [longitude], "latitude": [latitude]}
+    variable = CRCOpen.Variable.ANNUAL_MAXIMUM_DAILY_MAXIMUM_TEMPERATURE
+    source = CRCOpen(catalog=CRC_OPEN).select(
+        variables=variable,
+        area=Bounds(
+            west=longitude - 0.01,
+            south=latitude - 0.01,
+            east=longitude + 0.01,
+            north=latitude + 0.01,
+        ),
     )
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            plan.for_assets(place).return_periods([2]).write_parquet(
-                cache / "place.parquet"
-            )
-            plan.materialize(cache / "tx_max.parquet")
-    except (ValueError, LookupError) as error:  # e.g. no CRC Open cell here
+        inventory = source.inspect(runtime=runtime)
+        periods = windows_containing(
+            [series.period for series in inventory.series], years
+        )
+        if not periods:
+            return {"available": False, "reason": f"no CRC Open period holds {years}"}
+        # Read the cell's curves once, in degrees Celsius; evaluate the place on
+        # them and keep the curves for the "how often" question.
+        curves = (
+            source.select(periods=periods)
+            .convert_units(variable=variable.value, unit=TemperatureUnit.CELSIUS)
+            .read(runtime=runtime)
+        )
+        place = Assets(
+            {"asset_id": [name], "longitude": [longitude], "latitude": [latitude]}
+        )
+        levels = (
+            curves.evaluate(place)
+            .return_periods(RETURN_PERIODS)
+            .read(runtime=runtime)
+            .table.to_pylist()
+        )
+    except (ValueError, LookupError) as error:  # e.g. no release index or cell here
         return {"available": False, "reason": str(error)}
-    cells = pq.read_table(cache / "place.parquet").column("cell_index").to_pylist()
-    rows = [
-        row
-        for row in pq.read_table(cache / "tx_max.parquet").to_pylist()
-        if cells and row["cell_index"] == cells[0] and row["curve_kind"] != "no_data"
-    ]
-    if not rows:
-        return {"available": False, "reason": "no CRC Open tx_max curve at this place"}
-    cell = cells[0]
-    curves = {
-        row["horizon"]: curve_parameters_from_row(row).to_distribution() for row in rows
+    labels = {period.id: window_label(period) for period in periods}
+    matched = [row for row in levels if row["value"] is not None]
+    if not matched:
+        failures = {row["failure"]["code"] for row in levels if row["failure"]}
+        return {
+            "available": False,
+            "reason": f"no CRC Open tx_max curve at this place ({sorted(failures)})",
+        }
+    support = matched[0]["support_id"]
+    return_levels: dict[str, dict[int, float]] = {}
+    for row in matched:
+        return_levels.setdefault(labels[row["period_id"]], {})[
+            int(row["query_value"])
+        ] = round(row["value"], 2)
+    table = curves.table
+    by_period = {
+        labels[period_id]: curve
+        for curve, period_id, support_id in zip(
+            decode_curves(table),
+            table["period_id"].to_pylist(),
+            table["support_id"].to_pylist(),
+            strict=True,
+        )
+        if support_id == support and curve is not None
     }
-    baseline = min(curves)
-    threshold = float(quantiles(curves[baseline], [10])[0])
-    metadata = json.loads(
-        pq.read_schema(cache / "tx_max.parquet").metadata[b"crc.hazard.metadata"]
-    )
+    baseline = window_label(periods[0])
+    threshold = return_levels[baseline][10]
     return {
         "available": True,
-        "release": plan.resolve().catalog.release,
-        "pathway": rows[0]["pathway"],
-        "cell_index": str(cell),
-        "return_levels_c": {
-            horizon: dict(
-                zip(
-                    RETURN_PERIODS,
-                    (quantiles(curve, RETURN_PERIODS) - KELVIN).round(2).tolist(),
-                )
-            )
-            for horizon, curve in sorted(curves.items())
-        },
-        "baseline_horizon": baseline,
-        "baseline_1_in_10_c": round(threshold - KELVIN, 2),
+        "release": inventory.series[0].release.id,
+        "scenario": "ssp585",
+        "note": "CRC Open covers SSP5-8.5 only and has no historical baseline.",
+        "support_id": support,
+        "windows": {window_label(p): [p.start, p.end] for p in periods},
+        "return_levels_c": return_levels,
+        "baseline_window": baseline,
+        "baseline_1_in_10_c": threshold,
         "baseline_1_in_10_becomes_every_n_years": {
-            horizon: round(return_period_of(curve, threshold), 1)
-            for horizon, curve in sorted(curves.items())
+            label: round(return_period_of(curve, threshold), 1)
+            for label, curve in sorted(by_period.items())
         },
-        "licence": metadata.get("licence") or "CC-BY-NC-4.0",
+        "licence": licence_of(curves.report) or "CC-BY-NC-4.0",
         "other_pathways": f"Ask the open-source team: {MORE_DATA}",
     }
 
@@ -259,6 +346,35 @@ def write_atomic(path: Path, text: str) -> None:
     os.replace(handle.name, path)
 
 
+def headline(name: str, station: dict[str, Any], crc_open: dict[str, Any]) -> str:
+    if crc_open["available"]:
+        baseline = crc_open["baseline_window"]
+        later = {
+            window: years
+            for window, years in crc_open[
+                "baseline_1_in_10_becomes_every_n_years"
+            ].items()
+            if window != baseline
+        }
+        return (
+            f"In {name}, a 1-in-10-year hottest day reaches about "
+            f"{crc_open['baseline_1_in_10_c']:.1f} °C in {baseline} "
+            f"(CRC Open, SSP5-8.5). "
+            + ". ".join(
+                f"In {window} that heat returns about every {years:g} years"
+                for window, years in later.items()
+            )
+            + "."
+        )
+    if station["available"]:
+        return (
+            f"CRC Open has no curve for {name}. At {station['station_name']}, "
+            f"a 1-in-10-year hottest day measured about "
+            f"{station['return_levels_c'][10]:.1f} °C (NOAA GHCNh)."
+        )
+    return f"No hottest-day data was found for {name}."
+
+
 def main(argv: list[str] | None = None) -> dict[str, Any]:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -266,7 +382,13 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     parser.add_argument("--name", default="Phoenix, Arizona")
     parser.add_argument("--latitude", type=float, default=33.4278)
     parser.add_argument("--longitude", type=float, default=-112.0037)
-    parser.add_argument("--horizons", type=int, nargs="+", default=list(HORIZONS))
+    parser.add_argument(
+        "--horizons",
+        type=int,
+        nargs="+",
+        default=list(YEARS),
+        help="Years whose CRC Open four-year period to report",
+    )
     parser.add_argument(
         "--station-years",
         type=int,
@@ -281,14 +403,13 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     args = parser.parse_args(argv)
 
     args.output.mkdir(parents=True, exist_ok=True)
-    cache = args.output / "cache"
-    cache.mkdir(exist_ok=True)
+    runtime = Runtime(cache=Cache.reuse(args.output / "cache"))
 
     station = station_answer(
-        args.latitude, args.longitude, tuple(args.station_years), cache
+        args.latitude, args.longitude, tuple(args.station_years), runtime
     )
     crc_open = crc_open_answer(
-        args.name, args.latitude, args.longitude, tuple(args.horizons), cache
+        args.name, args.latitude, args.longitude, tuple(args.horizons), runtime
     )
     cdt = (
         {"available": False, "reason": "skipped"}
@@ -296,31 +417,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         else cdt_answer(args.latitude, args.longitude)
     )
 
-    if crc_open["available"]:
-        shift = crc_open["baseline_1_in_10_becomes_every_n_years"]
-        later = {
-            horizon: years
-            for horizon, years in shift.items()
-            if horizon != crc_open["baseline_horizon"]
-        }
-        answer = (
-            f"In {args.name}, a 1-in-10-year hottest day reaches about "
-            f"{crc_open['baseline_1_in_10_c']:.1f} °C in {crc_open['baseline_horizon']} "
-            f"(CRC Open, {crc_open['pathway'].upper()}). "
-            + ". ".join(
-                f"By {horizon} that heat returns about every {years:g} years"
-                for horizon, years in later.items()
-            )
-            + "."
-        )
-    elif station["available"]:
-        answer = (
-            f"CRC Open has no curve for {args.name}. At {station['station_name']}, "
-            f"a 1-in-10-year hottest day measured about "
-            f"{station['return_levels_c'][10]:.1f} °C (NOAA GHCNh)."
-        )
-    else:
-        answer = f"No hottest-day data was found for {args.name}."
+    answer = headline(args.name, station, crc_open)
     summary = {
         "question": "How hot will the hottest day get?",
         "place": {
@@ -345,11 +442,8 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
             f"station,{station['station_id']},{rp},{v}"
             for rp, v in station["return_levels_c"].items()
         ]
-    for horizon, levels in crc_open.get("return_levels_c", {}).items():
-        lines += [
-            f"crc_open,{crc_open['pathway']} {horizon},{rp},{v}"
-            for rp, v in levels.items()
-        ]
+    for window, levels in crc_open.get("return_levels_c", {}).items():
+        lines += [f"crc_open,ssp585 {window},{rp},{v}" for rp, v in levels.items()]
     if cdt["available"]:
         for label, levels in cdt["return_levels_c"].items():
             lines += [f"cdt,{label},{rp},{v}" for rp, v in levels.items()]
