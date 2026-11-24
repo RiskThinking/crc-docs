@@ -45,6 +45,9 @@ def test_current_notebooks_exist() -> None:
 def test_current_notebook_has_saved_previews(path: Path) -> None:
     notebook = nbformat.read(path, as_version=4)
     code = [cell for cell in notebook.cells if cell.cell_type == "code"]
+    unexecuted = all(not c.outputs and c.execution_count is None for c in code)
+    if not notebook.metadata["crc_docs"].get("ci", True) and unexecuted:
+        pytest.skip("ci: false notebook saved without outputs")
     assert [cell.execution_count for cell in code] == list(range(1, len(code) + 1))
     figures = [
         output.data for output in outputs(notebook) if PLOTLY in output.get("data", {})
