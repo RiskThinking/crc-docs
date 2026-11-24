@@ -491,7 +491,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "crc-framework", specifier = ">=1.0.0a2,<2" },
-    { name = "crc-sdk", extras = ["raster", "netcdf", "zarr"], git = "https://github.com/RiskThinking/crc-sdk?rev=ede3c70e6cf01c0967409344f09be1dea01b4931" },
+    { name = "crc-sdk", extras = ["raster", "netcdf", "zarr"], git = "https://github.com/RiskThinking/crc-sdk?rev=1adf2a22a545975ebeb9939faf1be916651fb121" },
     { name = "duckdb", specifier = ">=1.4,<2" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "kaleido", specifier = ">=0.2.1" },
@@ -539,7 +539,7 @@ wheels = [
 [[package]]
 name = "crc-sdk"
 version = "1.0.0a2"
-source = { git = "https://github.com/RiskThinking/crc-sdk?rev=ede3c70e6cf01c0967409344f09be1dea01b4931#ede3c70e6cf01c0967409344f09be1dea01b4931" }
+source = { git = "https://github.com/RiskThinking/crc-sdk?rev=1adf2a22a545975ebeb9939faf1be916651fb121#1adf2a22a545975ebeb9939faf1be916651fb121" }
 dependencies = [
     { name = "crc-framework" },
     { name = "duckdb" },
