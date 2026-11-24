@@ -28,7 +28,7 @@ dev = [
 
 [tool.uv.sources]
 # decode_curves ships in crc-sdk 1.0.0a2; until it is on PyPI, use its pull request.
-crc-sdk = { git = "https://github.com/RiskThinking/crc-sdk", rev = "ede3c70e6cf01c0967409344f09be1dea01b4931" }
+crc-sdk = { git = "https://github.com/RiskThinking/crc-sdk", rev = "1adf2a22a545975ebeb9939faf1be916651fb121" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
