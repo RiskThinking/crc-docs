@@ -1,94 +1,161 @@
-"""Materialize JRC flood curves for an AOI through the fluent SDK workflow.
+"""Query JRC EFAS or GloFAS flood depths per map pixel for an area.
 
 Run with:
 
-    uv run python pipelines/jrc_flood_pipeline.py
+    uv run python pipelines/jrc_flood_pipeline.py --dataset glofas \
+        --bounds -79.45 43.64 -79.40 43.68
+
+JRC publishes one depth map per return period. crc-sdk reads the pixels inside
+the box as supplied quantile knots (no fitting) and keeps each pixel's own
+footprint. Each pixel is queried at its centre for the requested return
+periods. A period outside the published maps returns ``query_outside_support``
+instead of an extrapolated depth. Depths are river flood depths above ground
+for the present climate, not projections.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+import os
+from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
-from crc_sdk.connectors import read_hazard_dataset
-from crc_sdk.workflows import (
-    HazardDataset,
-    JRCFloodPolicy,
-    curve_quantiles_at,
-    return_periods_to_probabilities,
-    warn_if_extrapolated,
-)
+import h3
+import pyarrow as pa
+import shapely
+from crc_sdk import JRC, Assets, Bounds, Cache, Dataset, Runtime
+
+CACHES = {"reuse": Cache.reuse, "offline": Cache.offline, "refresh": Cache.refresh}
+
+
+def support_points(table: pa.Table) -> dict[str, list[Any]]:
+    """One point per support: its footprint's centre (or its H3 cell's centre)."""
+    seen: dict[str, tuple[float, float]] = {}
+    for support, geometry, cell in zip(
+        table["support_id"].to_pylist(),
+        table["geometry"].to_pylist(),
+        table["cell_id"].to_pylist(),
+    ):
+        if support in seen:
+            continue
+        if geometry is not None:
+            centre = shapely.from_wkb(geometry).centroid
+            seen[support] = (centre.x, centre.y)
+        else:
+            latitude, longitude = h3.cell_to_latlng(h3.int_to_str(cell))
+            seen[support] = (longitude, latitude)
+    return {
+        "support_id": list(seen),
+        "longitude": [point[0] for point in seen.values()],
+        "latitude": [point[1] for point in seen.values()],
+    }
+
+
+def depths_by_support(
+    flood: Dataset,
+    return_periods: Sequence[float],
+    output: Path,
+    *,
+    runtime: Runtime | None = None,
+) -> dict[str, Any]:
+    """Save the selected curves, query every support, and summarise per period."""
+    output.mkdir(parents=True, exist_ok=True)
+    runtime = runtime or Runtime()
+    curves = flood.write(
+        output / "jrc_flood_curves.parquet", overwrite=True, runtime=runtime
+    )
+    points = support_points(curves.read().table)
+    if not points["support_id"]:
+        raise LookupError("the selected area contains no JRC flood pixels")
+    assets = Assets(points, id_column="support_id")
+    evaluation = (
+        curves.evaluate(assets)
+        .return_periods(list(return_periods))
+        .write(output / "jrc_flood_depths.parquet", overwrite=True)
+    )
+    rows = evaluation.read().table.to_pylist()
+    summary: dict[str, Any] = {}
+    for period in return_periods:
+        selected = [row for row in rows if row["query_value"] == period]
+        values = [row["value"] for row in selected if row["value"] is not None]
+        summary[f"rp{period:g}"] = {
+            "pixels_with_depth": len(values),
+            "maximum_depth": max(values) if values else None,
+            "failures": dict(
+                Counter(row["failure"]["code"] for row in selected if row["failure"])
+            ),
+        }
+    variable = curves.metadata.spec.variables[0]
+    source = curves.metadata.source
+    return {
+        "variable": variable.id,
+        "measurement": str(variable.measurement),
+        "release": source.release.id if source and source.release else None,
+        "pixels": len(points["support_id"]),
+        "return_periods": summary,
+        "outputs": {
+            "curves": str(curves.path),
+            "depths": str(evaluation.path),
+        },
+        "resources": [
+            {
+                "uri": item.uri,
+                "sha256": item.sha256,
+                "license": item.license,
+                "attribution": item.attribution,
+            }
+            for item in (source.resources if source else ())
+        ],
+    }
 
 
 def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument(
         "--bounds",
         type=float,
         nargs=4,
-        default=(-79.65, 43.58, -79.15, 43.85),
+        default=(-79.45, 43.64, -79.40, 43.68),
         metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
     )
-    p.add_argument("--return-periods", type=int, nargs="+", default=[10, 50, 100, 500])
+    p.add_argument(
+        "--return-periods", type=float, nargs="+", default=[10, 50, 100, 500]
+    )
     p.add_argument(
         "--dataset",
-        choices=("efas", "glofas"),
-        default="glofas",
-        help="Use EFAS for Europe and GloFAS for global coverage",
+        choices=[product.value for product in JRC.Product],
+        default=JRC.Product.GLOFAS.value,
+        help="EFAS covers Europe; GloFAS is global",
     )
-    p.add_argument("--h3-resolution", type=int, default=9)
-    p.add_argument(
-        "--cache-mode", choices=("reuse", "offline", "refresh"), default="reuse"
-    )
-    p.add_argument("--output-dir", type=Path, default=Path("pipeline_output"))
+    p.add_argument("--cache-mode", choices=sorted(CACHES), default="reuse")
+    p.add_argument("--output-dir", type=Path, default=Path("pipeline_output/jrc_flood"))
     return p
 
 
-def parse_args() -> argparse.Namespace:
-    return parser().parse_args()
-
-
-def main() -> None:
-    args = parse_args()
-    output_dir: Path = args.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    plan = (
-        getattr(HazardDataset, args.dataset)(version="latest")
-        .for_area(tuple(args.bounds))
-        .cache(output_dir / "jrc-source-cache", mode=args.cache_mode)
-        .source_periods("all")
-        .canonicalize(policy=JRCFloodPolicy.curated(h3_resolution=args.h3_resolution))
+def main(argv: Sequence[str] | None = None) -> dict[str, Any]:
+    args = parser().parse_args(argv)
+    west, south, east, north = args.bounds
+    flood = JRC(product=JRC.Product(args.dataset)).select(
+        area=Bounds(west=west, south=south, east=east, north=north)
     )
-    print(plan.explain())
-    hazard_path = output_dir / "jrc_depths_by_cell.parquet"
-    hazard = plan.materialize(hazard_path)
-    metadata = hazard.metadata()
-    warn_if_extrapolated(args.return_periods, metadata.return_period_support)
-
-    table = read_hazard_dataset(hazard.provider.source)
-    cells = table["cell_index"].to_pylist()
-    print(
-        f"wrote {hazard_path}: {table.num_rows:,} canonical rows "
-        f"from JRC {hazard.materialization.source_version}"
-    )
-    probabilities = return_periods_to_probabilities(
-        args.return_periods,
-        tail=metadata.return_period_tail,
-    )
-    for period, probability in zip(args.return_periods, probabilities):
-        by_cell: dict[int, float] = {}
-        missing = 0
-        for cell, depth in zip(cells, curve_quantiles_at(table, probability)):
-            if depth is None:
-                missing += 1
-                continue
-            by_cell[cell] = max(depth, by_cell.get(cell, float("-inf")))
-        summary = f"{max(by_cell.values()):.2f} m" if by_cell else "unavailable"
-        print(
-            f"  RP{period}: {len(by_cell):,} cells with values, max depth {summary}; "
-            f"{missing:,} source rows without values"
-        )
+    runtime = Runtime(cache=CACHES[args.cache_mode](args.output_dir / "cache"))
+    summary = {
+        "dataset": args.dataset,
+        "bounds": list(args.bounds),
+        **depths_by_support(
+            flood, args.return_periods, args.output_dir, runtime=runtime
+        ),
+    }
+    temporary = args.output_dir / ".summary.json.tmp"
+    temporary.write_text(json.dumps(summary, indent=2) + "\n")
+    os.replace(temporary, args.output_dir / "summary.json")
+    print(json.dumps(summary, indent=2))
+    return summary
 
 
 if __name__ == "__main__":

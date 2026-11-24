@@ -1,15 +1,24 @@
-"""Build bounded agricultural H3 units and optionally evaluate a CRC hazard.
+"""Build agricultural units for an area and evaluate a flood (or other) hazard on them.
 
 Examples:
 
     uv run python pipelines/agricultural_climate_pipeline.py \
-      --source usda --bounds -93.7 41.9 -93.2 42.3 --year 2025 \
-      --crop-codes 1 5 --hazard pipeline_output/iowa-glofas.parquet
+      --source usda --bounds -93.7 41.9 -93.2 42.3 --year 2024 --crop-codes 1 5
 
     uv run python pipelines/agricultural_climate_pipeline.py \
-      --source ftw --country-code FR --bounds 2.0 47.5 3.0 48.5 \
-      --year 2024 --minimum-confidence 80 \
-      --hazard pipeline_output/france-edo-smi.parquet
+      --source ftw --bounds 2.40 48.00 2.45 48.05 --minimum-confidence 80 \
+      --hazard pipeline_output/france-flood.parquet
+
+USDA Cropland pixels of the chosen crop codes are counted per H3 cell; Fields
+of the World supplies predicted field polygons. Without ``--hazard`` the
+pipeline reads JRC GloFAS flood depths for the same box. Any crc-sdk Dataset
+file with one series works as ``--hazard``. Each unit is evaluated at its
+centre (H3 cell centre or field centroid) for the requested return periods.
+
+Outputs: the units, the long-format evaluation, a GeoJSONSeq map layer, a
+summary table, a manifest with checksums and, when ``tippecanoe`` is on PATH,
+a PMTiles archive (``--skip-pmtiles`` to skip). Agricultural observations and
+hazard values are separate evidence; no combined risk score is inferred.
 """
 
 from __future__ import annotations
@@ -17,73 +26,46 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import shutil
 import subprocess
-import sys
-from contextlib import closing
+from collections import Counter, defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import h3
+import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
-from crc_sdk.connectors.duckdb import DuckDBConnection, sql_quote
-from crc_sdk.geometry.pmtiles import AREAS, PMTilesBuild
-from crc_sdk.workflows import (
-    AgriculturalLayer,
-    AssetPortfolio,
-    CellColumn,
-    HazardDataset,
-    JRCFloodPolicy,
+import shapely
+from crc_sdk import (
+    JRC,
+    Assets,
+    Bounds,
+    Cache,
+    Dataset,
+    EvaluationArtifact,
+    FieldsOfTheWorld,
+    Period,
+    Runtime,
+    USDACropland,
+)
+
+CACHES = {"reuse": Cache.reuse, "offline": Cache.offline, "refresh": Cache.refresh}
+WARNINGS = (
+    (
+        "Agricultural observations and hazard values are separate evidence layers; "
+        "no combined risk score was inferred."
+    ),
+    "FTW polygons are remote-sensing field units, not legal parcels.",
+    "USDA CDL pixel_count is a pixel sample, not acreage or yield.",
 )
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", choices=("usda", "ftw"))
-    parser.add_argument(
-        "--bounds",
-        type=float,
-        nargs=4,
-        metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
-    )
-    parser.add_argument("--year", type=int, default=2025)
-    parser.add_argument("--country-code", help="Required for FTW")
-    parser.add_argument("--crop-codes", type=int, nargs="+", default=[1, 5])
-    parser.add_argument("--minimum-confidence", type=float, default=80.0)
-    parser.add_argument("--h3-resolution", type=int)
-    parser.add_argument(
-        "--hazard",
-        type=Path,
-        help="Existing canonical CRC hazard Parquet; otherwise materialize GloFAS",
-    )
-    parser.add_argument(
-        "--cache-mode", choices=("reuse", "offline", "refresh"), default="reuse"
-    )
-    parser.add_argument(
-        "--return-periods", type=float, nargs="+", default=[10, 25, 100]
-    )
-    parser.add_argument(
-        "--output-dir", type=Path, default=Path("pipeline_output/agriculture")
-    )
-    parser.add_argument(
-        "--skip-pmtiles",
-        action="store_true",
-        help="Skip the final map archive (requires tippecanoe on PATH)",
-    )
-    parser.add_argument(
-        "--pmtiles-output",
-        type=Path,
-        help="Optional PMTiles destination; defaults inside --output-dir",
-    )
-    parser.add_argument(
-        "--pmtiles-threads",
-        type=int,
-        help="Optional tippecanoe thread limit (useful inside notebook kernels)",
-    )
-    parser.add_argument(
-        "--pmtiles-from-map",
-        type=Path,
-        help="Tile an existing map GeoParquet and exit (notebook-safe helper)",
-    )
-    return parser.parse_args()
+def _bounds(values: Sequence[float]) -> Bounds:
+    west, south, east, north = values
+    return Bounds(west=west, south=south, east=east, north=north)
 
 
 def _sha256(path: Path) -> str:
@@ -94,451 +76,305 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _resolution(args: argparse.Namespace) -> int:
-    if args.hazard:
-        hazard_resolution = HazardDataset.local(args.hazard).metadata().h3_resolution
-        if args.h3_resolution is not None and args.h3_resolution != hazard_resolution:
-            raise ValueError(
-                "--h3-resolution must match the canonical hazard metadata "
-                f"({hazard_resolution})"
-            )
-        return hazard_resolution
-    return args.h3_resolution if args.h3_resolution is not None else 7
-
-
-def ensure_hazard(args: argparse.Namespace) -> Path:
-    """Use a supplied canonical hazard or materialize bounded GloFAS flood."""
-    if args.hazard is not None:
-        return args.hazard
-    resolution = args.h3_resolution if args.h3_resolution is not None else 7
-    hazard_path = args.output_dir / "glofas-flood-curves.parquet"
-    hazard = (
-        HazardDataset.glofas(version="latest")
-        .for_area(tuple(args.bounds))
-        .cache(args.output_dir / "glofas-source-cache", mode=args.cache_mode)
-        .source_periods("all")
-        .canonicalize(policy=JRCFloodPolicy.curated(h3_resolution=resolution))
-        .materialize(hazard_path)
-    )
-    args.hazard = Path(hazard.provider.source)
-    return args.hazard
-
-
-def build_agricultural_units(
-    args: argparse.Namespace, connection: DuckDBConnection, resolution: int
-) -> Path:
-    bounds = tuple(args.bounds)
-    output = args.output_dir / f"{args.source}-agricultural-units.parquet"
-    if args.source == "usda":
-        scan = (
-            AgriculturalLayer.usda_cdl()
-            .resolution("30m")
-            .for_area(bounds)
-            .years(args.year)
-            .classes(args.crop_codes)
-            .scan()
-        )
-        pipeline = (
-            scan.pipeline(connection=connection)
-            .select(
-                "*, CAST(h3_latlng_to_cell(latitude, longitude, "
-                f"{resolution}) AS UBIGINT) AS cell_index"
-            )
-            .aggregate(
-                "count(*) AS pixel_count, avg(longitude) AS longitude, "
-                "avg(latitude) AS latitude, any_value(source_path) AS source_path",
-                groups="cell_index, year, crop_code, crop_name",
-            )
-            .select("concat(year, ':', crop_code, ':', cell_index) AS asset_id, *")
-        )
-    else:
-        if not args.country_code:
-            raise ValueError("--country-code is required for --source ftw")
-        scan = (
-            AgriculturalLayer.ftw_fields()
-            .in_country(args.country_code)
-            .for_area(bounds)
-            .years(args.year)
-            .confidence_at_least(args.minimum_confidence)
-            .scan()
-        )
-        pipeline = scan.pipeline(connection=connection).select(
-            "id AS asset_id, year, confidence, area_m2, perimeter_m, "
-            "geometry, "
-            "ST_X(ST_Centroid(geometry)) AS longitude, "
-            "ST_Y(ST_Centroid(geometry)) AS latitude, "
-            "CAST(h3_latlng_to_cell(ST_Y(ST_Centroid(geometry)), "
-            f"ST_X(ST_Centroid(geometry)), {resolution}) AS UBIGINT) AS cell_index, "
-            "country_code, source_path"
-        )
-    if args.source != "usda":
-        return pipeline.write_parquet(output, overwrite=True)
-
-    # DuckDB 1.5.x does not currently execute window expressions correctly
-    # over a Python Arrow batch reader. Keep the remote scan one-pass and
-    # bounded, then compute crop shares from the small local aggregate.
-    staged = output.with_name(f".{output.stem}-counts.parquet")
-    pipeline.write_parquet(staged, overwrite=True)
-    try:
-        with closing(connection.connect()) as con:
-            con.execute(
-                f"""
-                COPY (
-                    SELECT *, pixel_count::DOUBLE / sum(pixel_count) OVER
-                        (PARTITION BY cell_index, year) AS sampled_crop_share
-                    FROM read_parquet({sql_quote(str(staged))})
-                ) TO {sql_quote(str(output))}
-                  (FORMAT PARQUET, COMPRESSION ZSTD, OVERWRITE_OR_IGNORE true)
-                """
-            )
-    finally:
-        staged.unlink(missing_ok=True)
-    return output
-
-
-def filter_hazard_covered_units(
-    args: argparse.Namespace,
-    agricultural_path: Path,
-    connection: DuckDBConnection,
-) -> tuple[Path, int, int]:
-    """Retain evaluation candidates while preserving overall coverage counts."""
-    assert args.hazard is not None
-    matched = args.output_dir / f"{args.source}-hazard-covered-units.parquet"
-    with closing(connection.connect()) as con:
-        total = con.execute(
-            f"SELECT count(*) FROM read_parquet({sql_quote(str(agricultural_path))})"
-        ).fetchone()[0]
-        con.execute(
-            f"""
-            COPY (
-                SELECT a.*
-                FROM read_parquet({sql_quote(str(agricultural_path))}) a
-                SEMI JOIN (
-                    SELECT DISTINCT cell_index
-                    FROM read_parquet({sql_quote(str(args.hazard))})
-                ) h USING (cell_index)
-            ) TO {sql_quote(str(matched))}
-              (FORMAT PARQUET, COMPRESSION ZSTD, OVERWRITE_OR_IGNORE true)
-            """
-        )
-        matched_rows = con.execute(
-            f"SELECT count(*) FROM read_parquet({sql_quote(str(matched))})"
-        ).fetchone()[0]
-    return matched, int(matched_rows), int(total - matched_rows)
-
-
-def evaluate_hazard(args: argparse.Namespace, agricultural_path: Path) -> Path | None:
-    if args.hazard is None:
-        return None
-    columns = pq.read_schema(agricultural_path).names
-    passthrough = tuple(
-        name for name in columns if name not in ("asset_id", "cell_index", "geometry")
-    )
-    assets = AssetPortfolio(
-        agricultural_path,
-        id_column="asset_id",
-        location=CellColumn(),
-        passthrough_columns=passthrough,
-    )
-    output = args.output_dir / f"{args.source}-hazard-evaluation.parquet"
-    HazardDataset.local(args.hazard).for_assets(assets).return_periods(
-        args.return_periods
-    ).write_parquet(output)
-    return output
-
-
-def build_map_artifacts(
-    args: argparse.Namespace,
-    agricultural_path: Path,
-    evaluation_path: Path,
-    connection: DuckDBConnection,
-) -> tuple[Path, Path, Path | None]:
-    """Create a source-aware agricultural/hazard map, summary, and archive."""
-    map_path = args.output_dir / f"{args.source}-crop-flood-map.parquet"
-    summary_path = args.output_dir / f"{args.source}-crop-flood-summary.parquet"
-    value_columns = [
-        name
-        for name in pq.read_schema(evaluation_path).names
-        if name.startswith("value_")
-    ]
-    value_projection = ", ".join(f"e.{name}" for name in value_columns)
-    missing_values = (
-        " OR ".join(f"e.{name} IS NULL" for name in value_columns) or "true"
-    )
-    if value_projection:
-        value_projection = ", " + value_projection
-    weight_column = "pixel_count" if args.source == "usda" else "area_m2"
-    weight_prefix = "pixel" if args.source == "usda" else "area"
-    weighted_values = ", ".join(
-        f"sum({weight_column} * {name}) "
-        f"FILTER (WHERE {name} IS NOT NULL AND {weight_column} IS NOT NULL) / "
-        f"nullif(sum({weight_column}) "
-        f"FILTER (WHERE {name} IS NOT NULL AND {weight_column} IS NOT NULL), 0) "
-        f"AS {weight_prefix}_weighted_{name}"
-        for name in value_columns
-    )
-    if weighted_values:
-        weighted_values = ", " + weighted_values
-
-    if args.source == "usda":
-        agricultural_projection = "a.*"
-        geometry_projection = (
-            "h3_cell_to_boundary_wkb(CAST(a.cell_index AS UBIGINT)) AS geometry"
-        )
-        summary_projection = f"""
-            SELECT crop_code, crop_name, hazard_coverage,
-                   count(*) AS h3_crop_units,
-                   sum(pixel_count) AS sampled_pixels,
-                   sum(pixel_count * sampled_crop_share) /
-                       nullif(sum(pixel_count), 0) AS pixel_weighted_crop_share
-                   {weighted_values}
-            FROM read_parquet({sql_quote(str(map_path))})
-            GROUP BY crop_code, crop_name, hazard_coverage
-            ORDER BY crop_code, hazard_coverage
-        """
-        properties = (
-            "asset_id",
-            "year",
-            "crop_code",
-            "crop_name",
-            "pixel_count",
-            "sampled_crop_share",
-            "hazard_coverage",
-            "spatial_match",
-            *value_columns,
-        )
-    else:
-        agricultural_projection = "a.* EXCLUDE (geometry)"
-        geometry_projection = "a.geometry AS geometry"
-        summary_projection = f"""
-            SELECT country_code, year, hazard_coverage,
-                   count(*) AS field_units,
-                   sum(area_m2) AS observed_field_area_m2,
-                   avg(confidence) AS average_confidence,
-                   sum(area_m2 * confidence) /
-                       nullif(sum(area_m2), 0) AS area_weighted_confidence
-                   {weighted_values}
-            FROM read_parquet({sql_quote(str(map_path))})
-            GROUP BY country_code, year, hazard_coverage
-            ORDER BY country_code, year, hazard_coverage
-        """
-        properties = (
-            "asset_id",
-            "year",
-            "confidence",
-            "area_m2",
-            "perimeter_m",
-            "country_code",
-            "hazard_coverage",
-            "spatial_match",
-            *value_columns,
-        )
-
-    with closing(connection.connect()) as con:
-        con.execute(
-            f"""
-            COPY (
-                SELECT {agricultural_projection},
-                       CASE WHEN e.asset_id IS NULL
-                            THEN 'outside_modeled_hazard'
-                            WHEN {missing_values} THEN 'missing_hazard_value'
-                            ELSE 'modeled_hazard' END AS hazard_coverage,
-                       e.spatial_match{value_projection},
-                       {geometry_projection}
-                FROM read_parquet({sql_quote(str(agricultural_path))}) a
-                LEFT JOIN read_parquet({sql_quote(str(evaluation_path))}) e
-                  USING (asset_id)
-            ) TO {sql_quote(str(map_path))}
-              (FORMAT PARQUET, COMPRESSION ZSTD, OVERWRITE_OR_IGNORE true)
-            """
-        )
-        con.execute(
-            f"""
-            COPY (
-                {summary_projection}
-            ) TO {sql_quote(str(summary_path))}
-              (FORMAT PARQUET, COMPRESSION ZSTD, OVERWRITE_OR_IGNORE true)
-            """
-        )
-        pmtiles_path: Path | None = None
-        if not args.skip_pmtiles:
-            pmtiles_path = args.pmtiles_output or (
-                args.output_dir / f"{args.source}-crop-flood.pmtiles"
-            )
-            write_pmtiles_archive(
-                map_path,
-                pmtiles_path,
-                args.output_dir / "pmtiles-work",
-                connection=con,
-                properties=properties,
-                threads=args.pmtiles_threads,
-            )
-    return map_path, summary_path, pmtiles_path
-
-
-def write_pmtiles_archive(
-    map_path: Path,
-    output: Path,
-    work_dir: Path,
-    *,
-    connection: Any | None = None,
-    properties: tuple[str, ...] | None = None,
-    threads: int | None = None,
-) -> Path:
-    """Write the local agricultural/hazard GeoParquet as a vector-tile layer."""
-    (
-        PMTilesBuild(
-            con=connection,
-            work_dir=work_dir,
-            tippecanoe_threads=threads,
-        )
-        .layer(
-            map_path,
-            name="crop_flood",
-            zooms=(5, 13),
-            preset=AREAS,
-            property_columns=properties,
-        )
-        .write(output)
-    )
-    return output
-
-
-def write_manifest(
-    args: argparse.Namespace,
-    resolution: int,
-    agricultural_path: Path,
-    evaluation_path: Path | None,
-    matched_rows: int | None,
-    missing_rows: int | None,
-    map_path: Path,
-    summary_path: Path,
-    pmtiles_path: Path | None,
-) -> Path:
-    manifest: dict[str, Any] = {
-        "agricultural_source": args.source,
-        "bounds_wgs84": args.bounds,
-        "year": args.year,
-        "h3_resolution": resolution,
-        "agricultural_output": str(agricultural_path),
-        "agricultural_sha256": _sha256(agricultural_path),
-        "agricultural_rows": pq.read_metadata(agricultural_path).num_rows,
-        "hazard_input": str(args.hazard) if args.hazard else None,
-        "hazard_evaluation": str(evaluation_path) if evaluation_path else None,
-        "hazard_evaluation_sha256": (
-            _sha256(evaluation_path) if evaluation_path else None
-        ),
-        "hazard_matched_agricultural_rows": matched_rows,
-        "hazard_unmatched_agricultural_rows": missing_rows,
-        "map_output": str(map_path),
-        "map_output_sha256": _sha256(map_path),
-        "summary_output": str(summary_path),
-        "summary_output_sha256": _sha256(summary_path),
-        "pmtiles_output": str(pmtiles_path) if pmtiles_path else None,
-        "pmtiles_sha256": _sha256(pmtiles_path) if pmtiles_path else None,
-        "warnings": [
-            (
-                "Agricultural observations and hazard curves are separate evidence "
-                "layers; no combined risk score was inferred."
-            ),
-            (
-                "FTW polygons are remote-sensing field units, not legal parcels or "
-                "proof of ownership."
-            ),
-            ("USDA CDL pixel_count is a bounded pixel sample, not acreage or yield."),
-        ],
-    }
-    if args.hazard:
-        manifest["hazard_metadata"] = (
-            HazardDataset.local(args.hazard).metadata().model_dump(mode="json")
-        )
-    path = args.output_dir / "manifest.json"
-    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+def _write_parquet(table: pa.Table, path: Path) -> Path:
+    temporary = path.with_name(f".{path.name}.tmp")
+    pq.write_table(table, temporary)
+    os.replace(temporary, path)
     return path
 
 
-def main() -> None:
-    args = parse_args()
-    if args.pmtiles_from_map is not None:
-        output = args.pmtiles_output or args.pmtiles_from_map.with_suffix(".pmtiles")
-        write_pmtiles_archive(
-            args.pmtiles_from_map,
-            output,
-            args.output_dir / "pmtiles-work",
-            threads=args.pmtiles_threads,
+def usda_units(
+    bounds: Sequence[float],
+    year: int,
+    crop_codes: Sequence[int],
+    resolution: int,
+    runtime: Runtime,
+) -> pa.Table:
+    """Count the chosen crop pixels per H3 cell; share is among those crops."""
+    layer = USDACropland().select(
+        area=_bounds(bounds), periods=[Period.window(year, year)]
+    )
+    counts: Counter[tuple[str, int, str]] = Counter()
+    wanted = pa.array([float(code) for code in crop_codes])
+    with layer.batches(runtime=runtime) as stream:
+        for batch in stream:
+            kept = batch.filter(pc.is_in(batch["value"], value_set=wanted))
+            if not kept.num_rows:
+                continue
+            centres = shapely.centroid(
+                shapely.from_wkb(kept["geometry"].to_numpy(zero_copy_only=False))
+            )
+            xs, ys = shapely.get_x(centres), shapely.get_y(centres)
+            for x, y, code, label in zip(
+                xs, ys, kept["value"].to_pylist(), kept["label"].to_pylist()
+            ):
+                counts[(h3.latlng_to_cell(y, x, resolution), int(code), label)] += 1
+    totals: Counter[str] = Counter()
+    for (cell, _, _), count in counts.items():
+        totals[cell] += count
+    rows = []
+    for (cell, code, label), count in sorted(counts.items()):
+        latitude, longitude = h3.cell_to_latlng(cell)
+        rows.append(
+            {
+                "asset_id": f"{year}:{code}:{cell}",
+                "cell": cell,
+                "year": year,
+                "crop_code": code,
+                "crop_name": label,
+                "pixel_count": count,
+                "sampled_crop_share": count / totals[cell],
+                "longitude": longitude,
+                "latitude": latitude,
+            }
         )
-        print(f"pmtiles: {output}")
-        return
-    if args.source is None or args.bounds is None:
-        raise SystemExit("--source and --bounds are required for an agricultural run")
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+    return pa.Table.from_pylist(rows)
+
+
+def ftw_units(
+    bounds: Sequence[float], minimum_confidence: float, runtime: Runtime
+) -> pa.Table:
+    """Fields of the World polygons with area, perimeter and model score."""
+    layer = FieldsOfTheWorld().select(area=_bounds(bounds))
+    fields: dict[str, dict[str, Any]] = defaultdict(dict)
+    names = {
+        "ftw:field_area": "area_m2",
+        "ftw:field_perimeter": "perimeter_m",
+        "ftw:model_score": "confidence",
+    }
+    with layer.batches(runtime=runtime) as stream:
+        for batch in stream:
+            for row in batch.to_pylist():
+                field = fields[row["support_id"]]
+                field.update(asset_id=row["label"], geometry=row["geometry"])
+                if row["variable_id"] in names:
+                    field[names[row["variable_id"]]] = row["value"]
+    rows = []
+    for field in fields.values():
+        if field.get("confidence") is None or field["confidence"] < minimum_confidence:
+            continue
+        centre = shapely.from_wkb(field["geometry"]).centroid
+        rows.append({**field, "longitude": centre.x, "latitude": centre.y})
+    return pa.Table.from_pylist(rows)
+
+
+def evaluate_units(
+    units: pa.Table, hazard: Dataset, return_periods: Sequence[float], output: Path
+) -> EvaluationArtifact:
+    """Query the hazard at each unit's centre; unmatched units keep failure rows."""
+    if len(hazard.inspect().series) != 1:
+        raise ValueError("--hazard must hold exactly one series; select one first")
+    assets = Assets(units.select(["asset_id", "longitude", "latitude"]))
+    return (
+        hazard.evaluate(assets)
+        .return_periods(list(return_periods))
+        .write(output, overwrite=True)
+    )
+
+
+def map_and_summary(
+    source: str,
+    units: pa.Table,
+    evaluation: pa.Table,
+    output_dir: Path,
+) -> tuple[Path, Path]:
+    """One GeoJSON feature per unit with its hazard values, plus a summary table."""
+    values: dict[str, dict[str, float | None]] = defaultdict(dict)
+    coverage: dict[str, str] = {}
+    for row in evaluation.to_pylist():
+        values[row["asset_id"]][f"rp{row['query_value']:g}"] = row["value"]
+        if row["support_id"] is None:
+            coverage[row["asset_id"]] = "outside_hazard"
+        elif row["value"] is None:
+            coverage.setdefault(row["asset_id"], "missing_hazard_value")
+        else:
+            coverage.setdefault(row["asset_id"], "modeled_hazard")
+    queries = sorted(
+        {key for v in values.values() for key in v}, key=lambda k: float(k[2:])
+    )
+    weight = "pixel_count" if source == "usda" else "area_m2"
+    group = ("crop_code", "crop_name") if source == "usda" else ()
+    map_path = output_dir / f"{source}-crop-hazard.geojsonseq"
+    temporary = map_path.with_name(f".{map_path.name}.tmp")
+    sums: dict[tuple, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    with temporary.open("w") as features:
+        for unit in units.to_pylist():
+            status = coverage.get(unit["asset_id"], "outside_hazard")
+            hazard = values.get(unit["asset_id"], {})
+            if source == "usda":
+                boundary = [
+                    (lng, lat) for lat, lng in h3.cell_to_boundary(unit["cell"])
+                ]
+                geometry = shapely.Polygon(boundary)
+            else:
+                geometry = shapely.from_wkb(unit["geometry"])
+            properties = {
+                key: value
+                for key, value in unit.items()
+                if key not in ("geometry", "longitude", "latitude")
+            }
+            properties.update(hazard_coverage=status, **hazard)
+            features.write(
+                json.dumps(
+                    {
+                        "type": "Feature",
+                        "geometry": shapely.geometry.mapping(geometry),
+                        "properties": properties,
+                    }
+                )
+                + "\n"
+            )
+            key = (*(unit[name] for name in group), status)
+            bucket = sums[key]
+            bucket["units"] += 1
+            bucket[weight] += unit[weight] or 0.0
+            for query in queries:
+                if hazard.get(query) is not None and unit[weight]:
+                    bucket[f"weighted_{query}"] += unit[weight] * hazard[query]
+                    bucket[f"weight_{query}"] += unit[weight]
+    os.replace(temporary, map_path)
+    rows = []
+    for key, bucket in sorted(sums.items(), key=lambda item: str(item[0])):
+        row = dict(zip((*group, "hazard_coverage"), key))
+        row.update(units=int(bucket["units"]), **{weight: bucket[weight]})
+        for query in queries:
+            total = bucket.get(f"weight_{query}", 0.0)
+            row[f"{weight}_weighted_{query}"] = (
+                bucket[f"weighted_{query}"] / total if total else None
+            )
+        rows.append(row)
+    summary_path = _write_parquet(
+        pa.Table.from_pylist(rows), output_dir / f"{source}-crop-hazard-summary.parquet"
+    )
+    return map_path, summary_path
+
+
+def build_pmtiles(
+    geojsonseq: Path, output: Path, threads: int | None = None
+) -> Path | None:
+    """Tile the map layer with tippecanoe; skipped cleanly when it is missing."""
+    tippecanoe = shutil.which("tippecanoe")
+    if tippecanoe is None:
+        print("tippecanoe not found on PATH; skipping PMTiles")
+        return None
+    temporary = output.with_name(f".{output.stem}.tmp.pmtiles")
+    environment = dict(os.environ)
+    if threads:
+        environment["TIPPECANOE_MAX_THREADS"] = str(threads)
+    subprocess.run(
+        [
+            tippecanoe,
+            "-o",
+            str(temporary),
+            "--force",
+            "--quiet",
+            "-l",
+            "crop_hazard",
+            "-Z5",
+            "-z13",
+            "--drop-densest-as-needed",
+            str(geojsonseq),
+        ],
+        check=True,
+        env=environment,
+    )
+    os.replace(temporary, output)
+    return output
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--source", choices=("usda", "ftw"), required=True)
+    parser.add_argument(
+        "--bounds",
+        type=float,
+        nargs=4,
+        required=True,
+        metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
+    )
+    parser.add_argument("--year", type=int, default=2024, help="USDA CDL year")
+    parser.add_argument("--crop-codes", type=int, nargs="+", default=[1, 5])
+    parser.add_argument("--minimum-confidence", type=float, default=80.0)
+    parser.add_argument("--h3-resolution", type=int, default=7, help="USDA units")
+    parser.add_argument(
+        "--hazard", type=Path, help="crc-sdk Dataset file; default reads JRC GloFAS"
+    )
+    parser.add_argument(
+        "--return-periods", type=float, nargs="+", default=[10, 25, 100]
+    )
+    parser.add_argument("--cache-mode", choices=sorted(CACHES), default="reuse")
+    parser.add_argument(
+        "--output-dir", type=Path, default=Path("pipeline_output/agriculture")
+    )
+    parser.add_argument("--skip-pmtiles", action="store_true")
+    parser.add_argument("--pmtiles-output", type=Path)
+    parser.add_argument("--pmtiles-threads", type=int)
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> dict[str, Any]:
+    args = parse_args(argv)
+    output = args.output_dir
+    output.mkdir(parents=True, exist_ok=True)
+    runtime = Runtime(cache=CACHES[args.cache_mode](output / "cache"))
+    if args.hazard is not None:
+        hazard = Dataset.open(args.hazard)
+    else:
+        hazard = (
+            JRC(product=JRC.Product.GLOFAS)
+            .select(area=_bounds(args.bounds))
+            .write(output / "glofas-flood.parquet", overwrite=True, runtime=runtime)
+        )
+    if args.source == "usda":
+        units = usda_units(
+            args.bounds, args.year, args.crop_codes, args.h3_resolution, runtime
+        )
+    else:
+        units = ftw_units(args.bounds, args.minimum_confidence, runtime)
+    if not units.num_rows:
+        raise LookupError("no agricultural units in the selected area")
+    units_path = _write_parquet(
+        units, output / f"{args.source}-agricultural-units.parquet"
+    )
+    evaluation = evaluate_units(
+        units,
+        hazard,
+        args.return_periods,
+        output / f"{args.source}-hazard-evaluation.parquet",
+    )
+    map_path, summary_path = map_and_summary(
+        args.source, units, evaluation.read().table, output
+    )
+    pmtiles = None
     if not args.skip_pmtiles:
-        # Keep tippecanoe out of the process that opens the native Icechunk
-        # repository. The clean parent orchestrates a bounded data-only child,
-        # then tiles its small local GeoParquet after that child exits.
-        subprocess.run(
-            [
-                sys.executable,
-                str(Path(__file__).resolve()),
-                *sys.argv[1:],
-                "--skip-pmtiles",
-            ],
-            check=True,
-        )
-        map_path = args.output_dir / f"{args.source}-crop-flood-map.parquet"
-        pmtiles_path = args.pmtiles_output or (
-            args.output_dir / f"{args.source}-crop-flood.pmtiles"
-        )
-        write_pmtiles_archive(
+        pmtiles = build_pmtiles(
             map_path,
-            pmtiles_path,
-            args.output_dir / "pmtiles-work",
-            threads=args.pmtiles_threads,
+            args.pmtiles_output or output / f"{args.source}-crop-hazard.pmtiles",
+            args.pmtiles_threads,
         )
-        manifest_path = args.output_dir / "manifest.json"
-        manifest = json.loads(manifest_path.read_text())
-        manifest["pmtiles_output"] = str(pmtiles_path)
-        manifest["pmtiles_sha256"] = _sha256(pmtiles_path)
-        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-        print(f"pmtiles: {pmtiles_path}")
-        return
-    ensure_hazard(args)
-    resolution = _resolution(args)
-    connection = DuckDBConnection.for_analytics(
-        args.output_dir / "duckdb-spill",
-        extensions=("spatial", "httpfs", "h3"),
-        config={"threads": 1} if args.source == "usda" else None,
-    )
-    agricultural_path = build_agricultural_units(args, connection, resolution)
-    evaluation_input = agricultural_path
-    matched_rows = missing_rows = None
-    if args.hazard:
-        evaluation_input, matched_rows, missing_rows = filter_hazard_covered_units(
-            args, agricultural_path, connection
-        )
-    evaluation_path = evaluate_hazard(args, evaluation_input)
-    assert evaluation_path is not None
-    map_path, summary_path, _ = build_map_artifacts(
-        args, agricultural_path, evaluation_path, connection
-    )
-    pmtiles_path = None
-    manifest_path = write_manifest(
-        args,
-        resolution,
-        agricultural_path,
-        evaluation_path,
-        matched_rows,
-        missing_rows,
-        map_path,
-        summary_path,
-        pmtiles_path,
-    )
-    print(f"agricultural units: {agricultural_path}")
-    print(f"hazard evaluation: {evaluation_path or 'not requested'}")
-    print(f"map data: {map_path}")
-    print(f"summary: {summary_path}")
-    print(f"pmtiles: {pmtiles_path or 'skipped'}")
-    print(f"manifest: {manifest_path}")
+    counts = evaluation.metadata.report.counts
+    manifest = {
+        "agricultural_source": args.source,
+        "bounds_wgs84": list(args.bounds),
+        "hazard": str(hazard.path),
+        "hazard_variables": [v.id for v in hazard.metadata.spec.variables],
+        "units": units.num_rows,
+        "matched_units": counts.matched_assets,
+        "unmatched_units": counts.unmatched_assets,
+        "files": {
+            str(path): _sha256(path)
+            for path in (units_path, evaluation.path, map_path, summary_path, pmtiles)
+            if path is not None
+        },
+        "warnings": list(WARNINGS),
+    }
+    temporary = output / ".manifest.json.tmp"
+    temporary.write_text(json.dumps(manifest, indent=2) + "\n")
+    os.replace(temporary, output / "manifest.json")
+    print(json.dumps(manifest, indent=2))
+    return manifest
 
 
 if __name__ == "__main__":

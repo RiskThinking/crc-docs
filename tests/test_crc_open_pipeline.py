@@ -1,249 +1,167 @@
-"""Historical comparisons require usable values, not just output rows."""
+"""CRC Open screening against a synthetic Dataset 2.0 release index."""
 
 import hashlib
 import json
-import sys
+from pathlib import Path
 
 import pyarrow as pa
-import pyarrow.parquet as pq
 import pytest
-from crc_sdk.connectors.parquet import hazard_arrow_schema, write_hazard_dataset
-from crc_sdk.geometry import point_to_cell
-from crc_sdk.types import EnsembleDescriptor, HazardDatasetMetadata, SourceProvenance
+from crc_framework import (
+    Aggregation,
+    DepthAboveGround,
+    Duration,
+    LengthUnit,
+    PrecipitationAmount,
+    PrecipitationRate,
+    PrecipitationRateUnit,
+    Tail,
+    TimeUnit,
+)
+from crc_sdk import Dataset, Period, Probability, Scenario, Variable
 
 from pipelines import crc_open_pipeline
 
+DAY = Duration(1, unit=TimeUnit.DAY)
+RX1DAY = Variable(
+    "crc:rx1day",
+    measurement=PrecipitationRate(
+        unit=PrecipitationRateUnit.MILLIMETRES_PER_DAY,
+        accumulation_duration=DAY,
+        aggregation=Aggregation.MAXIMUM,
+    ),
+)
+WINDOWS = {2030: (2028, 2031), 2050: (2048, 2051), 2080: (2078, 2081)}
+
+
+def knots(sites: dict, offset: float) -> dict:
+    count = len(sites["asset_id"])
+    return {
+        "support_id": [s for s in sites["asset_id"] for _ in range(3)],
+        "longitude": [x for x in sites["longitude"] for _ in range(3)],
+        "latitude": [y for y in sites["latitude"] for _ in range(3)],
+        "probability": [0.5, 0.9, 0.99] * count,
+        "value": [v + offset for _ in range(count) for v in (30.0, 50.0, 80.0)],
+    }
+
 
 @pytest.fixture
-def canonical_source(tmp_path):
-    release = "test-release"
-    source = tmp_path / "source"
-    root = source / release
-    metadata = HazardDatasetMetadata(
-        h3_resolution=5,
-        value_unit="mm/day",
-        value_semantics="rx1day",
-        producer="test",
-        creation_version="test",
-        probability_semantics="annual_value_distribution",
-        ensemble=EnsembleDescriptor(pooling="pooled", scenario="ssp585"),
-        source=SourceProvenance(provider="test", dataset="rainfall"),
-    )
-    groups = {}
-    for site in crc_open_pipeline.SITES:
-        cell = point_to_cell(site["longitude"], site["latitude"], 5)
-        parent = (cell & ~(15 << 52)) | ((1 << 45) - 1)
-        groups.setdefault(f"{parent:x}", set()).add(cell)
-    partitions = []
-    for parent, cells in groups.items():
-        relative = f"rx1day/h3_r0={parent}/part-00000.parquet"
-        path = root / relative
-        path.parent.mkdir(parents=True)
-        rows = [
+def release(tmp_path: Path) -> str:
+    """A local release index: one Rx1day dataset per four-year window."""
+    resources = []
+    for year, (start, end) in WINDOWS.items():
+        dataset = Dataset.from_quantiles(
+            knots(crc_open_pipeline.SITES, offset=(year - 2030) / 10),
+            variable=RX1DAY,
+            scenario=Scenario("ssp585"),
+            period=Period.window(start, end),
+            probability=Probability.annual(tail=Tail.UPPER),
+        ).write(tmp_path / f"rx1day-{start}.parquet")
+        resources.append(
             {
-                "cell_index": cell,
-                "source_id": "test",
-                "source_geometry": None,
-                "hazard_name": "rx1day",
-                "horizon": horizon,
-                "pathway": "ssp585",
-                "curve_kind": "fitted",
-                "curve_type": "gumbel_r",
-                "curve_shape": None,
-                "curve_location": 20.0,
-                "curve_scale": 5.0,
-                "curve_atom_probability": None,
-                "curve_atom_location": None,
-                "curve_probabilities": None,
-                "curve_values": None,
-            }
-            for cell in sorted(cells)
-            for horizon in crc_open_pipeline.HORIZONS
-        ]
-        write_hazard_dataset(
-            pa.Table.from_pylist(rows, schema=hazard_arrow_schema(metadata)),
-            path,
-            metadata,
-        )
-        partitions.append(
-            {
-                "path": relative,
-                "h3_r0": parent,
-                "rows": len(rows),
-                "size_bytes": path.stat().st_size,
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                "horizons": list(crc_open_pipeline.HORIZONS),
+                "id": dataset.path.stem,
+                "uri": dataset.path.name,
+                "sha256": "sha256:"
+                + hashlib.sha256(dataset.path.read_bytes()).hexdigest(),
+                "metadata": json.loads(dataset.metadata.to_json()),
             }
         )
-    catalog = {
-        "catalog_version": 1,
-        "schema_version": "1.3",
-        "release": release,
-        "pathways": ["ssp585"],
-        "licence": "CC-BY-NC-4.0",
-        "attribution": "test data",
-        "retrieved_at": "2026-01-01T00:00:00Z",
-        "hazards": {
-            "rx1day": {
-                "unit": "mm/day",
-                "value_semantics": "rx1day",
-                "h3_resolution": 5,
-                "tail": "upper",
-                "probability_semantics": "annual_value_distribution",
-                "pooling": "pooled",
-                "pathways": ["ssp585"],
-                "horizons": list(crc_open_pipeline.HORIZONS),
-                "partitions": partitions,
-            }
-        },
-    }
-    payload = json.dumps(catalog, sort_keys=True).encode()
-    (root / "_CATALOG.json").write_bytes(payload)
-    (root / "_SUCCESS").write_text(hashlib.sha256(payload).hexdigest())
-    return source, release
+    index = tmp_path / "_INDEX.json"
+    index.write_text(
+        json.dumps({"schema_version": "1.0", "id": "fixture", "datasets": resources})
+    )
+    return str(index)
 
 
-@pytest.mark.parametrize("coverage", ["valid", "no_data", "uncovered"])
-def test_era5_comparison_requires_usable_values(
-    tmp_path, monkeypatch, capsys, coverage, canonical_source
-):
-    metadata = HazardDatasetMetadata(
-        h3_resolution=5,
-        value_unit="mm/day",
-        value_semantics="rx1day",
-        probability_semantics="annual_exceedance",
-        producer="test",
-        creation_version="test",
-        source=SourceProvenance(provider="era5", dataset="synthetic-test"),
+def test_screen_maps_years_to_windows_and_keeps_long_rows(tmp_path, release):
+    summary = crc_open_pipeline.screen(
+        pa.table(crc_open_pipeline.SITES), tmp_path / "out", catalog=release
     )
-    cells = {
-        point_to_cell(site["longitude"], site["latitude"], 5)
-        for site in crc_open_pipeline.SITES
+    assert summary["years_to_windows"] == {
+        "2030": "2028-2031",
+        "2050": "2048-2051",
+        "2080": "2078-2081",
     }
-    if coverage == "uncovered":
-        cells = {point_to_cell(0, 0, 5)}
-    row = {
-        "cell_index": next(iter(cells)),
-        "source_id": "test",
-        "source_geometry": None,
-        "hazard_name": "rx1day",
-        "horizon": 2005,
-        "pathway": "historic",
-        "curve_kind": "fitted",
-        "curve_type": "gumbel_r",
-        "curve_shape": None,
-        "curve_location": 20.0,
-        "curve_scale": 5.0,
-        "curve_atom_probability": None,
-        "curve_atom_location": None,
-        "curve_probabilities": None,
-        "curve_values": None,
+    rows = summary["rows"]
+    assert len(rows) == 3 * 3 * 2
+    assert summary["matched_assets"] == 3 and summary["unmatched_assets"] == 0
+    rp100 = {
+        (r["asset_id"], r["period"]): r["rx1day_mm_day"]
+        for r in rows
+        if r["return_period_years"] == 100
     }
-    if coverage == "no_data":
-        row.update(
-            curve_kind="no_data",
-            curve_type="insufficient_informative_support",
-            curve_location=None,
-            curve_scale=None,
+    assert rp100[("Central clinic", "2028-2031")] == pytest.approx(80.0)
+    assert rp100[("Central clinic", "2048-2051")] == pytest.approx(82.0)
+    assert "SSP5-8.5 only" in summary["note"]
+    assert (tmp_path / "out" / "ssp585_portfolio.parquet").is_file()
+
+
+def test_unmatched_assets_keep_failure_rows(tmp_path, release):
+    assets = pa.table(
+        {"asset_id": ["Demo"], "longitude": [-79.40], "latitude": [43.70]}
+    )
+    summary = crc_open_pipeline.screen(
+        assets, tmp_path / "out", years=[2050], catalog=release
+    )
+    assert summary["unmatched_assets"] == 1
+    assert {r["failure"] for r in summary["rows"]} == {"no_covering_support"}
+
+
+def test_year_outside_release_is_rejected(tmp_path, release):
+    with pytest.raises(LookupError, match="2100"):
+        crc_open_pipeline.screen(
+            pa.table(crc_open_pipeline.SITES),
+            tmp_path / "out",
+            years=[2100],
+            catalog=release,
         )
-    baseline = tmp_path / "baseline.parquet"
-    write_hazard_dataset(
-        pa.Table.from_pylist(
-            [dict(row, cell_index=cell) for cell in sorted(cells)],
-            schema=hazard_arrow_schema(metadata),
-        ),
-        baseline,
-        metadata,
-    )
-    output = tmp_path / "output"
-    monkeypatch.setattr(
-        sys,
-        "argv",
+
+
+def test_cli_reads_custom_csv_assets(tmp_path, release):
+    path = tmp_path / "assets.csv"
+    path.write_text("asset_id,longitude,latitude\nWest depot,-79.47,43.65\n")
+    output = tmp_path / "cli"
+    summary = crc_open_pipeline.main(
         [
-            "crc_open_pipeline",
-            "--source",
-            str(canonical_source[0]),
-            "--release",
-            canonical_source[1],
-            "--output",
-            str(output),
-            "--era5-rx1day",
-            str(baseline),
-        ],
-    )
-    if coverage == "valid":
-        crc_open_pipeline.main()
-    else:
-        with pytest.raises(
-            LookupError,
-            match="missing hazard curves"
-            if coverage == "uncovered"
-            else "no usable Rx1day return values",
-        ):
-            crc_open_pipeline.main()
-    printed = capsys.readouterr().out
-    projected = pq.read_table(output / "ssp585_portfolio.parquet")
-    assert projected.num_rows == len(crc_open_pipeline.SITES) * len(
-        crc_open_pipeline.HORIZONS
-    )
-    assert ("ERA5 historical comparison" in printed) == (coverage == "valid")
-    if coverage == "uncovered":
-        assert not (output / "era5_historical.parquet").exists()
-        return
-    historical = pq.read_table(output / "era5_historical.parquet")
-    if coverage == "valid":
-        assert historical["value_rp10"][0].as_py() > 20
-    elif coverage == "no_data":
-        assert historical.num_rows > 0
-        assert historical["value_rp10"].null_count == historical.num_rows
-
-
-def test_custom_assets_require_explicit_bounds(monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", ["crc_open_pipeline", "--assets", "portfolio.csv"])
-    with pytest.raises(SystemExit) as error:
-        crc_open_pipeline.main()
-    assert error.value.code == 2
-    assert "--assets requires --bounds" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize("format", ["csv", "parquet"])
-def test_custom_portfolio_and_horizon(tmp_path, monkeypatch, canonical_source, format):
-    path = tmp_path / f"assets.{format}"
-    if format == "csv":
-        path.write_text("asset_id,longitude,latitude\nDemo,-79.38,43.65\n")
-    else:
-        pq.write_table(
-            pa.table(
-                {
-                    "asset_id": ["Demo"],
-                    "longitude": [-79.38],
-                    "latitude": [43.65],
-                }
-            ),
-            path,
-        )
-    output = tmp_path / "output"
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "crc_open_pipeline",
+            "--catalog",
+            release,
             "--assets",
             str(path),
-            "--bounds",
-            *map(str, crc_open_pipeline.BOUNDS),
-            "--source",
-            str(canonical_source[0]),
-            "--release",
-            canonical_source[1],
-            "--horizons",
+            "--years",
             "2050",
             "--output",
             str(output),
-        ],
+        ]
     )
-    crc_open_pipeline.main()
-    rows = pq.read_table(output / "ssp585_portfolio.parquet")
-    assert rows.num_rows == 1
-    assert rows["asset_id"].to_pylist() == ["Demo"]
-    assert rows["horizon"].to_pylist() == [2050]
+    assert [r["asset_id"] for r in summary["rows"]] == ["West depot"] * 2
+    assert json.loads((output / "summary.json").read_text())["rows"]
+
+
+@pytest.mark.parametrize("case", ["valid", "uncovered", "not_daily"])
+def test_historical_comparison_requires_daily_values(tmp_path, case):
+    sites = crc_open_pipeline.SITES
+    measurement = PrecipitationAmount(
+        unit=LengthUnit.MILLIMETRE, accumulation_duration=DAY
+    )
+    table = knots(sites, offset=-10)
+    if case == "uncovered":
+        table["longitude"] = [0.0] * len(table["longitude"])
+        table["latitude"] = [0.0] * len(table["latitude"])
+    if case == "not_daily":
+        measurement = DepthAboveGround(unit=LengthUnit.METRE)
+    baseline = Dataset.from_quantiles(
+        table,
+        variable=Variable("era5:rx1day", measurement=measurement),
+        probability=Probability.annual(tail=Tail.UPPER),
+    ).write(tmp_path / "era5.parquet")
+    assets = pa.table(sites)
+    if case == "valid":
+        rows = crc_open_pipeline.compare_historical(
+            assets, baseline.path, tmp_path, [10, 100]
+        )
+        assert len(rows) == 6 and all(r["value"] > 20 for r in rows)
+    elif case == "uncovered":
+        with pytest.raises(LookupError, match="no usable Rx1day"):
+            crc_open_pipeline.compare_historical(assets, baseline.path, tmp_path, [10])
+    else:
+        with pytest.raises(ValueError, match="daily-precipitation"):
+            crc_open_pipeline.compare_historical(assets, baseline.path, tmp_path, [10])
