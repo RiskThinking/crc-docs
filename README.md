@@ -11,6 +11,12 @@ explains it, and a pipeline that runs it. The open toolkit
 the same curve format as CRC Open, so your own data, CRC Open and CDT can be
 compared like for like.
 
+> These notebooks, pipelines and skills use crc-sdk 1.0 and crc-framework 1.0.
+> Still on crc-sdk 0.x? Use the
+> [0.x edition (`v0.1.0`)](https://github.com/RiskThinking/crc-docs/tree/v0.1.0),
+> or move to 1.0 with the
+> [crc-sdk migration guide](https://github.com/RiskThinking/crc-sdk/blob/main/docs/migration-v1.md).
+
 ## Pick a question
 
 | Question | Ask an AI | Explore | Run at scale |

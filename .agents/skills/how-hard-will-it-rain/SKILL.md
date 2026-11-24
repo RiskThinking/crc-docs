@@ -52,7 +52,7 @@ high-emissions future (SSP5-8.5); other futures are available from
 opensource@riskthinking.ai. Install or update the toolkit, then run the analysis script:
 
 ```sh
-python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a3,<2"
+python -m pip install --quiet --upgrade "crc-sdk>=1,<2"
 curl -fsSL -o how_hard_will_it_rain.py \
   https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_hard_will_it_rain.py
 python how_hard_will_it_rain.py --name "PLACE" --latitude LAT --longitude LON --skip-era5 --skip-cdt

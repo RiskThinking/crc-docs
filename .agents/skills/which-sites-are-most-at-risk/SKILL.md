@@ -71,7 +71,7 @@ opensource@riskthinking.ai. Write the sites to `sites.csv` with the header
 `site,latitude,longitude` (add a `city` column if you have one: the map title then reads "site (city)"), install or update the toolkit, then run the script:
 
 ```sh
-python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a3,<2"
+python -m pip install --quiet --upgrade "crc-sdk>=1,<2"
 curl -fsSL -o which_sites_are_most_at_risk.py \
   https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/which_sites_are_most_at_risk.py
 python which_sites_are_most_at_risk.py --sites sites.csv --skip-era5 --skip-cdt

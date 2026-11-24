@@ -229,7 +229,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    # GHCNh merges ISD's same-time reports; crc-sdk 1.0.0a2 cannot yet read ISD hourly data.
+    # GHCNh is the default: it already merges ISD's same-time reports.
     parser.add_argument("--source", choices=sorted(PROVIDERS), default="ghcnh")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--stations", nargs="+", help="IDs for the chosen source")
