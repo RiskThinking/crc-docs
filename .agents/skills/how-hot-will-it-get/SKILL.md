@@ -48,7 +48,7 @@ opensource@riskthinking.ai.
 Install or update the toolkit, then run the analysis script:
 
 ```sh
-python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a2,<2"
+python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a3,<2"
 curl -fsSL -o how_hot_will_it_get.py \
   https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_hot_will_it_get.py
 python how_hot_will_it_get.py --name "PLACE" --latitude LAT --longitude LON --skip-cdt

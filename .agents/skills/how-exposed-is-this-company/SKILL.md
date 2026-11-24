@@ -73,7 +73,7 @@ matches. Then install or update the
 toolkit and run the script:
 
 ```sh
-python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a2,<2"
+python -m pip install --quiet --upgrade --pre "crc-sdk>=1.0.0a3,<2"
 curl -fsSL -o how_exposed_is_this_company.py \
   https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_exposed_is_this_company.py
 python how_exposed_is_this_company.py --brand "BRAND" --bounds W S E N --region XX --skip-cdt

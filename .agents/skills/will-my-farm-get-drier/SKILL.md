@@ -53,7 +53,7 @@ high-emissions future (SSP5-8.5); other futures are available from
 opensource@riskthinking.ai. Install or update the toolkit, then run the analysis script:
 
 ```sh
-python -m pip install --quiet --upgrade --pre "crc-sdk[netcdf]>=1.0.0a2,<2"
+python -m pip install --quiet --upgrade --pre "crc-sdk[netcdf]>=1.0.0a3,<2"
 curl -fsSL -o will_my_farm_get_drier.py \
   https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/will_my_farm_get_drier.py
 python will_my_farm_get_drier.py --name "PLACE" --latitude LAT --longitude LON --skip-edo --skip-cdt
