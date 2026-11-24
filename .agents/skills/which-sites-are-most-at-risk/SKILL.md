@@ -25,15 +25,18 @@ folder. Never answer with links to earlier files or a link in place of the chart
    and from what (e.g. "Toronto's hottest days warm the most, +4.2 °C by
    2070-2080; Phoenix gains the most hot days"), then at most three short
    bullets. Name the data route.
-2. **Table**: the 3 sites with the largest change in each hazard, combined (a
-   site that leads two hazards appears once), and no other sites. Sort the rows by the hazard asked about,
-   else hottest day. One short-headed column per hazard showing every row's
-   change, with units, so it fits the chat column. **Bold** the highest value in
-   each column. Say how many sites you ran. Write the table in the reply: never
-   offer or link a table file (the GeoJSON holds every value).
-3. **Chart**: one wide image with one panel per hazard (hottest day in °C, hot
-   days in days, wettest day in mm; leave out a hazard with no data). Each panel
-   is a horizontal bar chart with one bar per site showing the change from the
+2. **Table**: the 3 sites with the largest change in each of the four hazards
+   (see Chart), combined (a site that leads two hazards appears once), and no
+   other sites. Sort the rows by the hazard asked about, else hottest day. One
+   short-headed column per hazard, all four, showing every row's change with
+   units, so it fits the chat column. **Bold** the highest value in each column.
+   Say how many sites you ran. Write the table in the reply: never offer or link
+   a table file (the GeoJSON holds every value).
+3. **Chart**: one wide image with one panel per hazard, always these four:
+   hottest day (°C), hot days (days per year), wettest day (mm) and wildfire
+   weather (Fire Weather Index, points); leave out only a hazard the run has no
+   data for, and say so. Each panel is a
+   horizontal bar chart with one bar per site showing the change from the
    earlier period to the later one, sorted largest first, so the top bar is the
    most exposed site for that hazard. Sort each panel on its own. Print the value
    at the end of each bar; use the site names as labels.
@@ -71,23 +74,28 @@ folder. Never answer with links to earlier files or a link in place of the chart
    - **No inline renderer, or it fails:** say so in the Chart section and keep
      the table. Add one **Open the chart** link when the host provides a verified
      PNG attachment from this run.
-4. **Map and files** (whenever you have sites; see Map): paste the pipeline's
-   printed list unchanged, three bullets: the live map link first (the only
-   link), then the map file and the GeoJSON as plain text with the file names it
-   printed. If you only have the bare URL (`live_map_link.txt`), write it as
-   `- [Open the live map](URL)`. Then add one plain-text bullet, `<name>-chart.png: <short
-   description>`, with the same name prefix. Do not rewrite the bullets, add
-   links or backticks, or rename files. After a Route 1 run or when the pipeline
-   printed no list, write the same three bullets yourself from Map's commands.
+4. **Map and files** (whenever you have sites; see Map): three bullets, live
+   link first:
+   - the pipeline's `- [Open the live map](...)` line, unchanged (from the bare
+     URL in `live_map_link.txt`, write `- [Open the live map](URL)`); it is the
+     only link in the block;
+   - `<name>-map.html: <short description>`, plain text;
+   - `<name>-locations.geojson: <short description>`, plain text;
+   - `<name>-chart.png: <short description>`, plain text.
 
-   Then attach the three files (map, GeoJSON, chart; never `live_map.html`) as
-   download cards, shown after your closing lines (write nothing after them). The
-   pipeline copies the map and GeoJSON into the downloads folder (`/mnt/data` in
-   ChatGPT, `/mnt/user-data/outputs` in Claude) and prints `Download file:`
-   lines; copy the chart PNG there yourself, named like them (e.g.
-   `sites-chart.png`). Attach those files, never an earlier copy or a
-   `chatgpt.com/library` URL. With no downloads folder, give plain-text paths and
-   rely on the live link. Never claim a file was provided if it was not.
+   `<name>` is fresh and descriptive for this run, e.g. `apple-ca-rerun` (company,
+   area, and a word that differs from any earlier run in the conversation): never
+   the pipeline's generic `sites-` names, which an earlier run may already have
+   used. No links or backticks on file names.
+
+   Copy this run's map (`pipeline_output/sites/map/index.html`), GeoJSON and
+   chart PNG into the downloads folder (`/mnt/data` in ChatGPT,
+   `/mnt/user-data/outputs` in Claude) under those three names, then attach
+   exactly those three files as download cards, shown after your closing lines
+   (write nothing after them). Never attach `live_map.html`, an earlier copy or a
+   `chatgpt.com/library` URL, and never write sandbox links. With no downloads
+   folder, give plain-text paths and rely on the live link. Never claim a file
+   was provided if it was not.
 
 Close the text with two short lines: **How sure are we** (values describe an area
 of about 250 km² around each site, not the building, and come from climate
