@@ -378,3 +378,154 @@ def test_company_expected_damage_uses_builtin_models(tmp_path, monkeypatch):
         sum(damage[h]["early"] for h in how_exposed_is_this_company.HAZARDS), abs=0.02
     )
     assert set(answer["per_location_pct"]) == {"store-1", "store-2"}
+
+
+# End-to-end runs of each pipeline's command line: argument parsing, the
+# answers, the headline and every output file, with CRC Open read from a local
+# release and the other sources skipped or replaced.
+
+
+def trend_entries(variables, points, start=300.0, slope=0.1):
+    """Gumbel curves for each variable and window, rising with the window start."""
+    return [
+        (
+            variable,
+            VARIABLES[variable],
+            period,
+            ANNUAL,
+            [
+                (s, x, y, start + slope * (period.start - 2023), 2.0)
+                for s, x, y in points
+            ],
+        )
+        for variable in variables
+        for period in WINDOWS
+    ]
+
+
+def read_outputs(output: Path) -> tuple[dict, str]:
+    summary = json.loads((output / "summary.json").read_text())
+    return summary, summary["answer"]
+
+
+def test_how_hot_command_line(tmp_path, monkeypatch, capsys):
+    lon, lat = -112.0, 33.4
+    release = write_release(
+        tmp_path, trend_entries(["crc:tx_max"], [("cell", lon, lat)], 318.0)
+    )
+    monkeypatch.setattr(how_hot_will_it_get, "CRC_OPEN", release)
+    monkeypatch.setattr(
+        how_hot_will_it_get,
+        "station_answer",
+        lambda *args: {"available": False, "reason": "offline test"},
+    )
+    output = tmp_path / "out"
+    how_hot_will_it_get.main(
+        ["--name", "Here", "--latitude", str(lat), "--longitude", str(lon)]
+        + ["--output", str(output), "--skip-cdt"]
+    )
+    summary, answer = read_outputs(output)
+    assert summary["b_crc_open"]["available"]
+    assert answer in capsys.readouterr().out
+    csv_lines = (output / "return_levels.csv").read_text().splitlines()
+    assert csv_lines[0] == "source,label,return_period,hottest_day_c"
+    assert any(line.startswith("crc_open,ssp585 ") for line in csv_lines)
+
+
+def test_how_hard_command_line(tmp_path, monkeypatch):
+    lon, lat = -79.38, 43.65
+    release = write_release(
+        tmp_path, trend_entries(["crc:rx1day"], [("cell", lon, lat)], 30.0)
+    )
+    monkeypatch.setattr(how_hard_will_it_rain, "CRC_OPEN", release)
+    output = tmp_path / "out"
+    how_hard_will_it_rain.main(
+        ["--name", "Here", "--latitude", str(lat), "--longitude", str(lon)]
+        + ["--output", str(output), "--skip-era5", "--skip-cdt"]
+    )
+    summary, _ = read_outputs(output)
+    assert summary["b_crc_open"]["available"]
+    assert "crc_open," in (output / "return_levels.csv").read_text()
+
+
+def test_which_sites_command_line(tmp_path, monkeypatch):
+    points = [("hot", -112.0, 33.4), ("mild", -122.3, 47.6)]
+    variables = ["crc:tx_max", "crc:rx1day", "crc:hot_days", "crc:fwi"]
+    release = write_release(tmp_path, trend_entries(variables, points))
+    monkeypatch.setattr(which_sites_are_most_at_risk, "CRC_OPEN", release)
+    sites = tmp_path / "sites.csv"
+    sites.write_text(
+        "site,latitude,longitude,city\nHot,33.4,-112.0,Phoenix\nMild,47.6,-122.3,\n"
+    )
+    output = tmp_path / "out"
+    which_sites_are_most_at_risk.main(
+        ["--sites", str(sites), "--output", str(output), "--skip-era5", "--skip-cdt"]
+    )
+    summary, _ = read_outputs(output)
+    assert summary["b_crc_open"]["available"]
+    assert "crc_open,Hot," in (output / "site_hazards.csv").read_text()
+    features = json.loads((output / "sites.geojson").read_text())["features"]
+    assert [f["properties"]["title"] for f in features] == ["Hot (Phoenix)", "Mild"]
+    assert "tx_max_change" in features[0]["properties"]
+
+
+def test_will_my_farm_get_drier_command_line(tmp_path, monkeypatch):
+    lon, lat = -4.72, 41.65
+    variables = ["crc:prcptot", "crc:dry_days", "crc:max_consecutive_dry_days"]
+    release = write_release(
+        tmp_path, trend_entries(variables, [("cell", lon, lat)], 200.0)
+    )
+    monkeypatch.setattr(will_my_farm_get_drier, "CRC_OPEN", release)
+    output = tmp_path / "out"
+    will_my_farm_get_drier.main(
+        ["--name", "Farm", "--latitude", str(lat), "--longitude", str(lon)]
+        + ["--output", str(output), "--skip-edo", "--skip-cdt"]
+    )
+    summary, _ = read_outputs(output)
+    assert summary["b_crc_open"]["available"]
+
+
+def test_how_exposed_command_line(tmp_path, monkeypatch):
+    points = [("a", -80.2, 25.8), ("b", -81.4, 28.5)]
+    entries = [
+        (
+            "crc:cyclone",
+            WindSpeed(unit=SpeedUnit.METRES_PER_SECOND),
+            Period.timeless(),
+            Probability.distribution(),
+            [(s, x, y, 25.0, 4.0) for s, x, y in points],
+        )
+    ] + trend_entries(["crc:rx1day", "crc:hot_days"], points, 60.0, 1.0)
+    monkeypatch.setattr(
+        how_exposed_is_this_company, "CRC_OPEN", write_release(tmp_path, entries)
+    )
+    table = pa.table(
+        {
+            "asset_id": ["store-1", "store-2"],
+            "name": ["Store 1", "Store 2"],
+            "longitude": [-80.2, -81.4],
+            "latitude": [25.8, 28.5],
+        }
+    )
+    monkeypatch.setattr(
+        how_exposed_is_this_company,
+        "find_locations",
+        lambda *args: {
+            "available": True,
+            "release": "test",
+            "count": table.num_rows,
+            "table": table,
+            "attribution": "test",
+        },
+    )
+    output = tmp_path / "out"
+    summary = how_exposed_is_this_company.main(
+        ["--bounds", "-82", "25", "-80", "29", "--output", str(output)]
+        + ["--skip-hurricanes", "--skip-cdt"]
+    )
+    assert summary["b_crc_open"]["available"]
+    rows = (output / "locations.csv").read_text().splitlines()
+    assert len(rows) == 3
+    features = json.loads((output / "locations.geojson").read_text())["features"]
+    assert len(features) == 2
+    assert "total_damage_2070_2080" in features[0]["properties"]
