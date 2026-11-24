@@ -9,7 +9,10 @@ dependencies = [
     "kaleido>=0.2.1",
     "pandas>=3.0.5",
     "plotly>=6.9.0,<7",
-    "crc-sdk[agriculture,zarr,raster,netcdf,geometry]>=0.11.1,<1",
+    "crc-sdk[raster,netcdf,zarr]>=1.0.0a2,<2",
+    "crc-framework>=1.0.0a2,<2",
+    "duckdb>=1.4,<2",
+    "numpy>=2",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +25,10 @@ dev = [
     "pytest>=8",
     "ruff>=0.16",
 ]
+
+[tool.uv.sources]
+# decode_curves ships in crc-sdk 1.0.0a2; until it is on PyPI, use its pull request.
+crc-sdk = { git = "https://github.com/RiskThinking/crc-sdk", rev = "ede3c70e6cf01c0967409344f09be1dea01b4931" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
