@@ -86,7 +86,14 @@ jobs:
           CRC_DOCS_SHARD: ${{ matrix.shard }}
           CRC_DOCS_SHARDS: "4"
           CRC_DOCS_EXECUTED_DIR: ${{ runner.temp }}/executed
-        run: uv run pytest -q tests/test_live.py
+        # Upstream services rate-limit and drop connections; rerun only those
+        # failures, after a pause, and report every test's duration.
+        run: >-
+          uv run pytest -q tests/test_live.py --durations=0
+          --reruns 2 --reruns-delay 60
+          --only-rerun "HTTP Error (429|5[0-9][0-9])"
+          --only-rerun "URLError|ConnectionError|RemoteDisconnected|IncompleteRead"
+          --only-rerun "TimeoutError|timed out|Too Many Requests"
 
       - name: Upload executed notebooks
         if: always()

@@ -23,6 +23,7 @@ velo = [
 [dependency-groups]
 dev = [
     "pytest>=8",
+    "pytest-rerunfailures>=15",
     "ruff>=0.16",
 ]
 
