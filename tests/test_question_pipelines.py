@@ -102,12 +102,19 @@ def write_release(tmp_path: Path, entries: list[tuple]) -> str:
                 "sha256": "sha256:"
                 + hashlib.sha256((root / uri).read_bytes()).hexdigest(),
                 "metadata": json.loads(Dataset.open(root / uri).metadata.to_json()),
+                # The whole world is always a valid conservative extent.
+                "extent": {
+                    "west": -180.0,
+                    "south": -90.0,
+                    "east": 180.0,
+                    "north": 90.0,
+                },
             }
         )
     index = root / "_INDEX.json"
     index.write_text(
         json.dumps(
-            {"schema_version": "1.0", "id": "test-release", "datasets": datasets}
+            {"schema_version": "1.1", "id": "test-release", "datasets": datasets}
         )
     )
     return str(index)

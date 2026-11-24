@@ -491,7 +491,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "crc-framework", specifier = ">=1.0.0a2,<2" },
-    { name = "crc-sdk", extras = ["raster", "netcdf", "zarr"], specifier = ">=1.0.0a2,<2" },
+    { name = "crc-sdk", extras = ["raster", "netcdf", "zarr"], specifier = ">=1.0.0a3,<2" },
     { name = "duckdb", specifier = ">=1.4,<2" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "kaleido", specifier = ">=0.2.1" },
@@ -538,7 +538,7 @@ wheels = [
 
 [[package]]
 name = "crc-sdk"
-version = "1.0.0a2"
+version = "1.0.0a3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "crc-framework" },
@@ -553,9 +553,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c6/66/8de2bbeab2e045881d9257adfb8546689bbb30872a0da7500bd3ddc2b0b8/crc_sdk-1.0.0a2.tar.gz", hash = "sha256:c195e93b8a6a68c0e684e38a35fcdfcac09770c00af790bc89137480fccadc5d", size = 408359, upload-time = "2026-11-24T16:06:06.163Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/65/a0/238b565fce115659952eff9d84c5ad7e134a7d14a931a848a25e606d8a48/crc_sdk-1.0.0a3.tar.gz", hash = "sha256:aab49c2f90a8dbee9603371c830181a5d00f08cf9fd62934466afbcd16d4e99f", size = 413350, upload-time = "2026-11-24T18:07:50.864Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0f/cf/887614e450c6f8bdaa769443a00c8cc79c59a2ad3adec767d3f521b89ee4/crc_sdk-1.0.0a2-py3-none-any.whl", hash = "sha256:0a512227487b07ce338969479c6df9b39edc8cea429cc30b6ce75c41c3c87c07", size = 320028, upload-time = "2026-11-24T16:06:04.681Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/27/2f937d5c61fb52ea10cce9917cf7fd669bac76d298b2ccbe502243dbdf72/crc_sdk-1.0.0a3-py3-none-any.whl", hash = "sha256:26fcfd1beb1cd80abff9643ab537c5863a8ead1afa8a9cee933d3e05d20c7cfa", size = 323048, upload-time = "2026-11-24T18:07:49.351Z" },
 ]
 
 [package.optional-dependencies]

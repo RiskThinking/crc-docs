@@ -63,11 +63,18 @@ def release(tmp_path: Path) -> str:
                 "sha256": "sha256:"
                 + hashlib.sha256(dataset.path.read_bytes()).hexdigest(),
                 "metadata": json.loads(dataset.metadata.to_json()),
+                # The whole world is always a valid conservative extent.
+                "extent": {
+                    "west": -180.0,
+                    "south": -90.0,
+                    "east": 180.0,
+                    "north": 90.0,
+                },
             }
         )
     index = tmp_path / "_INDEX.json"
     index.write_text(
-        json.dumps({"schema_version": "1.0", "id": "fixture", "datasets": resources})
+        json.dumps({"schema_version": "1.1", "id": "fixture", "datasets": resources})
     )
     return str(index)
 
