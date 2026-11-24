@@ -33,7 +33,7 @@ from typing import Any
 # Where a standalone copy of this script downloads the bundle from. Point
 # CRC_VIZ_BASE_URL elsewhere (a release, a CDN) to use another build.
 BUNDLE_URL = (
-    "https://raw.githubusercontent.com/RiskThinking/crc-docs/main/assets/crc-viz"
+    "https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/assets/crc-viz"
 )
 BUNDLE_FILES = ("crc-viz.js", "crc-viz.css")
 # Expected yearly damage per location, averaged over the early and late windows

@@ -11,7 +11,7 @@ the host can draw it, and one line on how sure we are. Avoid jargon; when a term
 is unavoidable, explain it in a few words.
 
 Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/how-hard-will-it-rain/SKILL.md`.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/.agents/skills/how-hard-will-it-rain/SKILL.md`.
 If you can fetch it and it differs from this copy, follow the fetched one.
 
 ## 1. Find the place
@@ -52,9 +52,9 @@ high-emissions future (SSP5-8.5); other futures are available from
 opensource@riskthinking.ai. Install or update the toolkit, then run the analysis script:
 
 ```sh
-python -m pip install --quiet --upgrade "crc-sdk[geometry]"
+python -m pip install --quiet --upgrade "crc-sdk[geometry]>=0.11.1,<1"
 curl -fsSL -o how_hard_will_it_rain.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_hard_will_it_rain.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/pipelines/how_hard_will_it_rain.py
 python how_hard_will_it_rain.py --name "PLACE" --latitude LAT --longitude LON --skip-era5 --skip-cdt
 ```
 
@@ -64,7 +64,7 @@ its `answer` is the headline and `b_crc_open` holds the values for three windows
 of years (each an average of several horizons).
 
 `--skip-era5` keeps the run under a minute. Only if the person wants the
-recorded past too, install `"crc-sdk[zarr,netcdf,geometry]"` and drop that flag
+recorded past too, install `"crc-sdk[zarr,netcdf,geometry]>=0.11.1,<1"` and drop that flag
 (about 8 minutes); then `a_era5` holds the ERA5 record, which is on a coarse
 grid and understates local downpours.
 
@@ -78,7 +78,7 @@ Do not estimate or recall numbers. Explain in two sentences what the analysis
 would show, then offer both options:
 
 - **Free, no setup:** open the
-  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/how_hard_will_it_rain.ipynb),
+  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/how_hard_will_it_rain.ipynb),
   change `CITY` in the first cell and choose **Runtime → Run all**.
 - **Every emissions future, in this chat:** connect CDT Express. Add a custom
   connection named **CDT Express** with the URL `https://mcp.riskthinking.ai/mcp`

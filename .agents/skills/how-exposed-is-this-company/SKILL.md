@@ -11,7 +11,7 @@ the host can draw it, and one line on how sure we are. Avoid jargon; when a term
 is unavoidable, explain it in a few words.
 
 Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/how-exposed-is-this-company/SKILL.md`.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/.agents/skills/how-exposed-is-this-company/SKILL.md`.
 If you can fetch it and it differs from this copy, follow the fetched one,
 unless you are inside a checkout of the crc-docs repository: then this copy and
 the repository's own `pipelines/` and `tools/` are newer than the published
@@ -73,9 +73,9 @@ so the damage functions match. Then install or update the
 toolkit and run the script:
 
 ```sh
-python -m pip install --quiet --upgrade "crc-sdk[geometry]"
+python -m pip install --quiet --upgrade "crc-sdk[geometry]>=0.11.1,<1"
 curl -fsSL -o how_exposed_is_this_company.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_exposed_is_this_company.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/pipelines/how_exposed_is_this_company.py
 python how_exposed_is_this_company.py --brand "BRAND" --bounds W S E N --region XX --skip-cdt
 ```
 
@@ -104,7 +104,7 @@ to `CRCMap`:
 
 ```sh
 curl -fsSL -o build_map_page.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/tools/build_map_page.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/tools/build_map_page.py
 python build_map_page.py pipeline_output/company/locations.geojson --link
 python build_map_page.py pipeline_output/company/locations.geojson \
   --output pipeline_output/company/map
@@ -163,7 +163,7 @@ Do not estimate or recall numbers. Explain in two sentences what the analysis
 would show, then offer both options:
 
 - **Free, no setup:** open the
-  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/how_exposed_is_this_company.ipynb),
+  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/how_exposed_is_this_company.ipynb),
   change `BRAND`, `AREA` and `REGION` in the first cell and choose **Runtime → Run all**.
 - **The whole company, every emissions future, in this chat:** connect CDT
   Express. Add a custom connection named **CDT Express** with the URL

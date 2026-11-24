@@ -1,5 +1,10 @@
 # Climate Risk Commons
 
+> **This is the crc-sdk 0.x edition (`v0.1.0`).** Its notebooks, pipelines and
+> skills use crc-sdk 0.11 and crc-framework 0.x, and every link points to this
+> tag. For crc-sdk 1.0, use the
+> [`main` branch](https://github.com/RiskThinking/crc-docs).
+
 [![Join the community on Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/quuhzr3wS4)
 
 Answers to everyday climate-risk questions, three ways each: with free public
@@ -15,15 +20,15 @@ compared like for like.
 
 | Question | Ask an AI | Explore | Run at scale |
 |---|---|---|---|
-| **How hot will the hottest day get?** | `How hot will the hottest day get in my city in the future?` · [skill](.agents/skills/how-hot-will-it-get/SKILL.md) | [Preview](notebooks/how_hot_will_it_get.ipynb) · [Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/how_hot_will_it_get.ipynb) | [Pipeline](pipelines/how_hot_will_it_get.py) |
-| **How hard will it rain?** | `How much rain can fall in one day where I live, and is it getting worse?` · [skill](.agents/skills/how-hard-will-it-rain/SKILL.md) | [Preview](notebooks/how_hard_will_it_rain.ipynb) · [Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/how_hard_will_it_rain.ipynb) | [Pipeline](pipelines/how_hard_will_it_rain.py) |
-| **Which of my sites are most at risk?** | `Which of my stores is most at risk from climate change?` · [skill](.agents/skills/which-sites-are-most-at-risk/SKILL.md) | [Preview](notebooks/which_sites_are_most_at_risk.ipynb) · [Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/which_sites_are_most_at_risk.ipynb) | [Pipeline](pipelines/which_sites_are_most_at_risk.py) |
-| **Will my farm get drier?** | `Will my farm get less rain and longer dry spells in the future?` · [skill](.agents/skills/will-my-farm-get-drier/SKILL.md) | [Preview](notebooks/will_my_farm_get_drier.ipynb) · [Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/will_my_farm_get_drier.ipynb) | [Pipeline](pipelines/will_my_farm_get_drier.py) |
-| **How exposed is this company?** | `How exposed is Walmart to climate change?` · [skill](.agents/skills/how-exposed-is-this-company/SKILL.md) | [Preview](notebooks/how_exposed_is_this_company.ipynb) · [Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/how_exposed_is_this_company.ipynb) | [Pipeline](pipelines/how_exposed_is_this_company.py) |
+| **How hot will the hottest day get?** | `How hot will the hottest day get in my city in the future?` · [skill](.agents/skills/how-hot-will-it-get/SKILL.md) | [Preview](notebooks/how_hot_will_it_get.ipynb) · [Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/how_hot_will_it_get.ipynb) | [Pipeline](pipelines/how_hot_will_it_get.py) |
+| **How hard will it rain?** | `How much rain can fall in one day where I live, and is it getting worse?` · [skill](.agents/skills/how-hard-will-it-rain/SKILL.md) | [Preview](notebooks/how_hard_will_it_rain.ipynb) · [Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/how_hard_will_it_rain.ipynb) | [Pipeline](pipelines/how_hard_will_it_rain.py) |
+| **Which of my sites are most at risk?** | `Which of my stores is most at risk from climate change?` · [skill](.agents/skills/which-sites-are-most-at-risk/SKILL.md) | [Preview](notebooks/which_sites_are_most_at_risk.ipynb) · [Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/which_sites_are_most_at_risk.ipynb) | [Pipeline](pipelines/which_sites_are_most_at_risk.py) |
+| **Will my farm get drier?** | `Will my farm get less rain and longer dry spells in the future?` · [skill](.agents/skills/will-my-farm-get-drier/SKILL.md) | [Preview](notebooks/will_my_farm_get_drier.ipynb) · [Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/will_my_farm_get_drier.ipynb) | [Pipeline](pipelines/will_my_farm_get_drier.py) |
+| **How exposed is this company?** | `How exposed is Walmart to climate change?` · [skill](.agents/skills/how-exposed-is-this-company/SKILL.md) | [Preview](notebooks/how_exposed_is_this_company.ipynb) · [Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/how_exposed_is_this_company.ipynb) | [Pipeline](pipelines/how_exposed_is_this_company.py) |
 
 New to return periods and risk curves? Start with the five-minute primer:
 [Preview](notebooks/climate_risk_curves_primer.ipynb) ·
-[Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/climate_risk_curves_primer.ipynb).
+[Open in Colab](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/climate_risk_curves_primer.ipynb).
 
 ## Three ways in
 

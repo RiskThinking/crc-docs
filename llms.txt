@@ -19,6 +19,6 @@ Conventions: return period RP means a value with probability 1/RP of being reach
 ## Optional
 
 - [Data-source notebooks](notebooks/sources/): ERA5, NOAA, JRC, CMIP6, ECCC, USGS, HYDAT, CHIRPS, IBTrACS, cropland, admin boundaries
-- [crc-sdk docs](https://github.com/RiskThinking/crc-sdk/blob/main/docs/README.md)
+- [crc-sdk docs](https://github.com/RiskThinking/crc-sdk/blob/v0.11.2/docs/README.md)
 - [CDT Express MCP](https://github.com/RiskThinking/cdt-express-mcp)
 - Contacts: more CRC Open data, opensource@riskthinking.ai; research access, academic@riskthinking.ai; CDT trial, https://velo.riskthinking.ai/cdt-express

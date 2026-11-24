@@ -22,7 +22,7 @@ Each skill picks its data route in this order unless the person names one:
 CDT through the CDT Express MCP server ([`.mcp.json`](.mcp.json),
 `https://mcp.riskthinking.ai/mcp`), then CRC Open through the matching pipeline,
 then the Colab notebook. Hosts without repository access can fetch a skill from
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/<name>/SKILL.md`.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/.agents/skills/<name>/SKILL.md`.
 CI also packages every skill as an uploadable zip (`tools/package_skills.py`).
 
 ## Layout

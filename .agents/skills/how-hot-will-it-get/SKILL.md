@@ -11,7 +11,7 @@ the host can draw it, and one line on how sure we are. Avoid jargon; when a term
 is unavoidable, explain it in a few words.
 
 Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/how-hot-will-it-get/SKILL.md`.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/.agents/skills/how-hot-will-it-get/SKILL.md`.
 If you can fetch it and it differs from this copy, follow the fetched one.
 
 ## 1. Find the place
@@ -48,9 +48,9 @@ opensource@riskthinking.ai.
 Install or update the toolkit, then run the analysis script:
 
 ```sh
-python -m pip install --quiet --upgrade "crc-sdk[geometry]"
+python -m pip install --quiet --upgrade "crc-sdk[geometry]>=0.11.1,<1"
 curl -fsSL -o how_hot_will_it_get.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_hot_will_it_get.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/pipelines/how_hot_will_it_get.py
 python how_hot_will_it_get.py --name "PLACE" --latitude LAT --longitude LON --skip-cdt
 ```
 
@@ -69,7 +69,7 @@ Do not estimate or recall numbers. Explain in two sentences what the analysis
 would show, then offer both options:
 
 - **Free, no setup:** open the
-  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/how_hot_will_it_get.ipynb),
+  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/how_hot_will_it_get.ipynb),
   change `CITY` in the first cell and choose **Runtime → Run all**.
 - **Every emissions future, in this chat:** connect CDT Express. Add a custom
   connection named **CDT Express** with the URL `https://mcp.riskthinking.ai/mcp`

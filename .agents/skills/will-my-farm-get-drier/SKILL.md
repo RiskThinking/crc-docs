@@ -11,7 +11,7 @@ the host can draw it, and one line on how sure we are. Avoid jargon; when a term
 is unavoidable, explain it in a few words.
 
 Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/will-my-farm-get-drier/SKILL.md`.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/.agents/skills/will-my-farm-get-drier/SKILL.md`.
 If you can fetch it and it differs from this copy, follow the fetched one.
 
 ## 1. Find the farm
@@ -53,9 +53,9 @@ high-emissions future (SSP5-8.5); other futures are available from
 opensource@riskthinking.ai. Install or update the toolkit, then run the analysis script:
 
 ```sh
-python -m pip install --quiet --upgrade "crc-sdk[geometry]"
+python -m pip install --quiet --upgrade "crc-sdk[geometry]>=0.11.1,<1"
 curl -fsSL -o will_my_farm_get_drier.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/will_my_farm_get_drier.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/pipelines/will_my_farm_get_drier.py
 python will_my_farm_get_drier.py --name "PLACE" --latitude LAT --longitude LON --skip-edo --skip-cdt
 ```
 
@@ -75,7 +75,7 @@ Do not estimate or recall numbers. Explain in two sentences what the analysis
 would show, then offer both options:
 
 - **Free, no setup:** open the
-  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/will_my_farm_get_drier.ipynb),
+  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/will_my_farm_get_drier.ipynb),
   change `FARM` in the first cell and choose **Runtime → Run all**.
 - **Every emissions future, in this chat:** connect CDT Express. Add a custom
   connection named **CDT Express** with the URL `https://mcp.riskthinking.ai/mcp`

@@ -11,7 +11,7 @@ one chart when the host can draw it, and one line on how sure we are. Avoid
 jargon; when a term is unavoidable, explain it in a few words.
 
 Latest version of this skill:
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/which-sites-are-most-at-risk/SKILL.md`.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/.agents/skills/which-sites-are-most-at-risk/SKILL.md`.
 If you can fetch it and it differs from this copy, follow the fetched one,
 unless you are inside a checkout of the crc-docs repository: then this copy and
 the repository's own `pipelines/` and `tools/` are newer than the published
@@ -71,9 +71,9 @@ opensource@riskthinking.ai. Write the sites to `sites.csv` with the header
 `site,latitude,longitude` (add a `city` column if you have one: the map title then reads "site (city)"), install or update the toolkit, then run the script:
 
 ```sh
-python -m pip install --quiet --upgrade "crc-sdk[geometry]"
+python -m pip install --quiet --upgrade "crc-sdk[geometry]>=0.11.1,<1"
 curl -fsSL -o which_sites_are_most_at_risk.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/which_sites_are_most_at_risk.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/pipelines/which_sites_are_most_at_risk.py
 python which_sites_are_most_at_risk.py --sites sites.csv --skip-era5 --skip-cdt
 ```
 
@@ -97,7 +97,7 @@ script does this):
 
 ```sh
 curl -fsSL -o build_map_page.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/tools/build_map_page.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/v0.1.0/tools/build_map_page.py
 python build_map_page.py pipeline_output/sites/sites.geojson --link
 python build_map_page.py pipeline_output/sites/sites.geojson \
   --output pipeline_output/sites/map --title "Sites on the CRC map"
@@ -144,7 +144,7 @@ Do not estimate or recall numbers. Explain in two sentences what the screening
 would show, then offer both options:
 
 - **Free, no setup:** open the
-  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/which_sites_are_most_at_risk.ipynb),
+  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/v0.1.0/notebooks/which_sites_are_most_at_risk.ipynb),
   replace `SITES` in the first cell with the list and choose **Runtime → Run all**.
 - **Every emissions future, in this chat:** connect CDT Express. Add a custom
   connection named **CDT Express** with the URL `https://mcp.riskthinking.ai/mcp`
