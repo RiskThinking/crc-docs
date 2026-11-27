@@ -5,11 +5,11 @@ description: Tells investors, lenders and analysts how exposed a listed company 
 
 # How exposed is this company?
 
-Every raw URL below points at the branch `plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by`: use it for this
+Every raw URL below points at the `main` branch: use it for this
 skill, the pipeline, the map builder and the chart helper. If the user names a
 different revision, swap it into those URLs; in a matching crc-docs checkout,
 use the local copies. This skill's file is
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/.agents/skills/how-exposed-is-this-company/SKILL.md`.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/how-exposed-is-this-company/SKILL.md`.
 
 The reader may not be an expert: plain words, no jargon, no invented numbers.
 Never ask for identifiers or technical options.
@@ -133,7 +133,7 @@ browser tool cannot fetch GitHub, download with `curl` in a shell instead.
 ```sh
 python -m pip install --quiet --upgrade "crc-sdk>=1,<2"
 curl -fsSL -o how_exposed_is_this_company.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/pipelines/how_exposed_is_this_company.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/how_exposed_is_this_company.py
 python how_exposed_is_this_company.py --brand "BRAND" --bounds W S E N --region XX --skip-cdt
 ```
 
@@ -163,7 +163,7 @@ Do not estimate or recall numbers. In two sentences say what the analysis would
 show, then offer:
 
 - **Free:** the
-  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/notebooks/how_exposed_is_this_company.ipynb)
+  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/how_exposed_is_this_company.ipynb)
   (edit `BRAND`, `AREA`, `REGION` in the first cell, then Runtime → Run all).
 - **Whole company, every future:** connect CDT Express, a custom connector
   named **CDT Express** at `https://mcp.riskthinking.ai/mcp` (Claude: Customize →
@@ -184,7 +184,7 @@ The pipeline already builds the map and prints `Live map:`, `Map:` and
 
 ```sh
 curl -fsSL -o build_map_page.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/tools/build_map_page.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/tools/build_map_page.py
 python build_map_page.py pipeline_output/company/locations.geojson --link
 python build_map_page.py pipeline_output/company/locations.geojson \
   --output pipeline_output/company/map

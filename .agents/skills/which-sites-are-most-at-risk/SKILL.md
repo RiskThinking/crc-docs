@@ -5,11 +5,11 @@ description: Ranks a list of places (stores, offices, warehouses, plants, homes)
 
 # Which of my sites are most at risk?
 
-Every raw URL below points at the branch `plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by`: use it for this
+Every raw URL below points at the `main` branch: use it for this
 skill, the pipeline, the map builder and the chart helper. If the user names a
 different revision, swap it into those URLs; in a matching crc-docs checkout,
 use the local copies. This skill's file is
-`https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/.agents/skills/which-sites-are-most-at-risk/SKILL.md`.
+`https://raw.githubusercontent.com/RiskThinking/crc-docs/main/.agents/skills/which-sites-are-most-at-risk/SKILL.md`.
 
 The reader may not be an expert: plain words, no jargon, no invented numbers.
 Never ask for coordinates or technical options.
@@ -169,7 +169,7 @@ this folder if present, or `pipelines/` in a checkout; else download):
 ```sh
 python -m pip install --quiet --upgrade "crc-sdk>=1,<2"
 curl -fsSL -o which_sites_are_most_at_risk.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/pipelines/which_sites_are_most_at_risk.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/pipelines/which_sites_are_most_at_risk.py
 python which_sites_are_most_at_risk.py --sites sites.csv --skip-era5 --skip-cdt
 ```
 
@@ -191,7 +191,7 @@ Do not estimate or recall numbers. In two sentences say what the screening would
 show, then offer:
 
 - **Free:** the
-  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/notebooks/which_sites_are_most_at_risk.ipynb)
+  [Colab notebook](https://colab.research.google.com/github/RiskThinking/crc-docs/blob/main/notebooks/which_sites_are_most_at_risk.ipynb)
   (replace `SITES` in the first cell, then Runtime → Run all).
 - **Every future, in this chat:** connect CDT Express, a custom connector named
   **CDT Express** at `https://mcp.riskthinking.ai/mcp` (Claude: Customize →
@@ -210,7 +210,7 @@ The Route 2 pipeline already builds the map and prints `Live map:`, `Map:` and
 
 ```sh
 curl -fsSL -o build_map_page.py \
-  https://raw.githubusercontent.com/RiskThinking/crc-docs/plat-2408-crc-docs-fix-map-not-being-prepared-from-skills-by/tools/build_map_page.py
+  https://raw.githubusercontent.com/RiskThinking/crc-docs/main/tools/build_map_page.py
 python build_map_page.py pipeline_output/sites/sites.geojson --link
 python build_map_page.py pipeline_output/sites/sites.geojson \
   --output pipeline_output/sites/map --title "Sites on the CRC map"
